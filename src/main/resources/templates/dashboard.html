@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AI Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/documents.css">
+</head>
+<body>
+<div class="app-layout">
+
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/sidebar :: sidebar('chat')}"></div>
+
+    <!-- Main Chat Area -->
+    <main class="chat-main">
+        <!-- Header -->
+        <div class="chat-header">
+            <button class="btn-toggle-sidebar" id="toggleSidebar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <div class="chat-title" id="chatTitle">Cuộc trò chuyện mới</div>
+            <div class="header-actions">
+                <button th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or currentUser.role.code == 'MANAGER')}" 
+                        class="btn-icon-action" onclick="window.location.href='/documents/upload'" title="Upload tài liệu">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div th:if="${error}" class="alert alert-error" th:text="${error}" style="margin: 10px 24px; padding: 12px; background: #ffebee; color: #c62828; border-radius: 6px; font-weight: 500;"></div>
+        <div th:if="${success}" class="alert alert-success" th:text="${success}" style="margin: 10px 24px; padding: 12px; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 500;"></div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <!-- Welcome screen -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-icon">🤖</div>
+                <h2>Xin chào, <span th:text="${currentUser.username}">bạn</span>!</h2>
+                <p>Tôi là trợ lý AI của hệ thống. Hãy bắt đầu một cuộc trò chuyện.</p>
+                <div class="suggestion-chips">
+                    <button class="chip" onclick="sendQuickMessage('Xin chào! Tôi có thể hỏi gì?')">👋 Xin chào!</button>
+                    <button class="chip" onclick="sendQuickMessage('Hướng dẫn sử dụng tài liệu')">📚 Tài liệu</button>
+                    <button class="chip" onclick="sendQuickMessage('Giới thiệu về các phòng ban')">🏢 Phòng ban</button>
+                    <button class="chip" onclick="sendQuickMessage('Tôi có thể làm gì với hệ thống này?')">💡 Hỗ trợ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-input-area">
+            <div class="input-container">
+                <textarea id="messageInput" placeholder="Nhắn tin với AI Agent..."
+                          rows="1" onkeydown="handleKeyDown(event)"></textarea>
+                <button class="btn-send" id="sendBtn" onclick="sendMessage()" title="Gửi">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+            <div class="input-footer">AI Agent có thể mắc lỗi. Vui lòng kiểm tra thông tin quan trọng.</div>
+        </div>
+    </main>
+
+</div>
+
+<!-- Thymeleaf data for JS -->
+<script th:inline="javascript">
+    const CURRENT_USER = {
+        username:   /*[[${currentUser.username}]]*/ 'User',
+        email:      /*[[${currentUser.email}]]*/ '',
+        department: /*[[${currentUser.department != null ? currentUser.department.name : ''}]]*/ '',
+        role:       /*[[${currentUser.role.code}]]*/ '',
+        avatarUrl:  /*[[${currentUser.avatarUrl}]]*/ ''
+    };
+</script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

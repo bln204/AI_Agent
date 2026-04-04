@@ -1,0 +1,236 @@
+.upload-container {
+    max-width: 1000px;
+    width: 100%;
+    margin: 0 auto;
+    background: white;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border);
+    box-sizing: border-box;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: all 0.2s;
+    outline: none;
+    background: #fcfcfc;
+    box-sizing: border-box;
+}
+
+.form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    background: white;
+}
+
+.form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.form-row .form-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.manager-note {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 4px;
+}
+
+.file-drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fbfbfb;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.file-drop-zone:hover {
+    border-color: var(--primary);
+    background: #f0f7ff;
+}
+
+.file-drop-zone.active {
+    border-color: var(--primary);
+    background: #e0f0ff;
+}
+
+.file-drop-zone.has-file {
+    border-color: #22c55e;
+    background: #f0fdf4;
+}
+
+.file-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.file-drop-zone .file-hint {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin-top: 8px;
+}
+
+.hidden-file-input {
+    display: none;
+}
+
+.form-actions {
+    margin-top: 40px;
+    text-align: right;
+}
+
+.btn-submit {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-submit:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.btn-cancel {
+    background: #f1f5f9;
+    color: #475569;
+    text-decoration: none;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    margin-right: 12px;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background: #e2e8f0;
+}
+
+.alert {
+    padding: 16px;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    font-size: 0.95rem;
+}
+
+.alert-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fee2e2;
+}
+
+.sidebar-footer-form {
+    margin: 0;
+    width: 100%;
+}
+
+.btn-logout-full {
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+.remove-file-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.remove-file-btn:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+.remove-file-btn[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 1100px) {
+    .upload-container {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .upload-container {
+        padding: 24px;
+    }
+
+    .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .form-actions {
+        text-align: stretch;
+    }
+
+    .btn-cancel,
+    .btn-submit {
+        width: 100%;
+        justify-content: center;
+        margin-right: 0;
+    }
+
+    .btn-cancel {
+        margin-bottom: 12px;
+    }
+}

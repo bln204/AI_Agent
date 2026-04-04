@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng Ký - AI Agent</title>
+    <link rel="stylesheet" href="/css/register.css">
+</head>
+<body>
+    <div class="container">
+        <div class="auth-container">
+            <div class="auth-box register-box">
+                <h1>AI Agent Web</h1>
+                <p class="subtitle">Tạo Tài Khoản Mới</p>
+                
+                <form id="registerForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="fullname">Họ Tên</label>
+                        <input type="text" id="fullname" name="fullname" placeholder="Nhập họ và tên" required>
+                        <span class="error" id="fullnameError"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" placeholder="Nhập email của bạn" required>
+                        <span class="error" id="emailError"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">Số Điện Thoại</label>
+                        <input type="tel" id="phone" name="phone" placeholder="Nhập số điện thoại">
+                        <span class="error" id="phoneError"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="department">Phòng Ban</label>
+                        <select id="department" name="department" required style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-family: inherit; font-size: 1rem; margin-top: 5px;">
+                            <option value="">-- Chọn phòng ban --</option>
+                            <option value="Nhân sự">Nhân sự</option>
+                            <option value="Kế toán">Kế toán</option>
+                            <option value="IT">IT</option>
+                            <option value="Marketing">Marketing</option>
+                        </select>
+                        <span class="error" id="departmentError"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Mật Khẩu</label>
+                        <input type="password" id="password" name="password" placeholder="Tối thiểu 8 ký tự" required>
+                        <span class="error" id="passwordError"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirmPassword">Xác Nhận Mật Khẩu</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Nhập lại mật khẩu" required>
+                        <span class="error" id="confirmPasswordError"></span>
+                    </div>
+                    
+                    <div class="form-group checkbox">
+                        <input type="checkbox" id="terms" name="terms" required>
+                        <label for="terms">Tôi đồng ý với <a href="#" target="_blank">Điều Khoản Dịch Vụ</a></label>
+                        <span class="error" id="termsError"></span>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Đăng Ký</button>
+                </form>
+                
+                <div class="divider">HOẶC</div>
+                
+                <div class="oauth-buttons">
+                    <a href="/api/oauth2/authorization/google" class="btn btn-google">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                            <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                            <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                        </svg>
+                        Đăng Ký với Google
+                    </a>
+                </div>
+                
+                <p class="auth-link">
+                    Đã có tài khoản? <a href="/login">Đăng Nhập</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('fullname').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const department = document.getElementById('department').value;
+            
+            // Validation
+            if (password !== confirmPassword) {
+                alert('Mật khẩu xác nhận không khớp!');
+                return;
+            }
+            
+            if (password.length < 8) {
+                alert('Mật khẩu phải tối thiểu 8 ký tự!');
+                return;
+            }
+
+            if (!department) {
+                alert('Vui lòng chọn phòng ban!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        email: email,
+                        password: password,
+                        department: department
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Đăng ký thành công! Vui lòng đăng nhập.');
+                    // Redirect to login
+                    setTimeout(() => {
+                        window.location.href = '/login?registered=true';
+                    }, 1500);
+                } else {
+                    alert('Lỗi: ' + data.message);
+                }
+            } catch (error) {
+                alert('Lỗi kết nối: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

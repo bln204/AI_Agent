@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Thành Viên - AI Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/documents.css}">
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <style>
+        .members-container {
+            background: #fff;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid #f1f5f9;
+            margin-top: 24px;
+        }
+        .member-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .member-row:last-child { border-bottom: none; }
+        .member-info { display: flex; align-items: center; gap: 16px; }
+        .member-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #475569;
+        }
+        .member-name { font-weight: 600; color: #1e293b; }
+        .member-email { font-size: 0.875rem; color: #64748b; }
+        
+        .add-member-section {
+            background: #f8fafc;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 32px;
+            border: 1px solid #e2e8f0;
+        }
+        .btn-remove {
+            color: #dc2626;
+            background: none;
+            border: 1px solid #fca5a5;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8125rem;
+            transition: all 0.2s;
+        }
+        .btn-remove:hover { background: #fef2f2; border-color: #ef4444; }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 16px;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: #1e293b; }
+    </style>
+</head>
+<body>
+<div class="docs-page">
+    <div th:replace="~{fragments/sidebar :: sidebar('projects')}"></div>
+
+    <main class="docs-main">
+        <div th:replace="~{fragments/header :: header('👥 Quản Lý Thành Viên', 'Dự án: ' + project.name)}"></div>
+
+        <div class="docs-content" style="padding: 24px 0;">
+            <a href="/projects" class="back-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Quay lại danh sách dự án
+            </a>
+
+            <div th:if="${success}" class="alert alert-success" style="background:#dcfce7; color:#166534; padding:16px; border-radius:12px; margin-bottom:24px; font-weight:500;" th:text="${success}"></div>
+            <div th:if="${error}" class="alert alert-error" style="background:#fee2e2; color:#991b1b; padding:16px; border-radius:12px; margin-bottom:24px; font-weight:500;" th:text="${error}"></div>
+
+            <div class="members-container">
+                <!-- Add Member Form (Director only) -->
+                <div class="add-member-section" th:if="${canManageMembers}">
+                    <h3 style="margin-top:0; margin-bottom:16px; font-size:1.125rem;">Thêm thành viên mới</h3>
+                    <form th:action="@{/projects/{id}/members/add(id=${project.id})}" method="post" style="display:flex; gap:12px;">
+                        <select name="userId" class="form-control" style="flex-grow:1;" required>
+                            <option value="">Chọn người dùng để thêm...</option>
+                            <option th:each="user : ${allUsers}" 
+                                    th:value="${user.id}" 
+                                    th:text="${user.username + ' (' + user.email + ')'}"></option>
+                        </select>
+                        <button type="submit" class="btn-create-main" style="white-space:nowrap; padding:0 24px;">Thêm vào dự án</button>
+                    </form>
+                </div>
+
+                <h3 style="margin-top:0; margin-bottom:20px; font-size:1.25rem;">Danh sách thành viên hiện tại</h3>
+                
+                <div th:if="${members.isEmpty()}" style="text-align:center; padding:40px; color:#94a3b8;">
+                    Chưa có thành viên nào tham gia dự án này.
+                </div>
+
+                <div th:each="member : ${members}" class="member-row">
+                    <div class="member-info">
+                        <div class="member-avatar" th:text="${#strings.substring(member.user.username,0,1).toUpperCase()}">U</div>
+                        <div>
+                            <div class="member-name" th:text="${member.user.username}">Username</div>
+                            <div class="member-email" th:text="${member.user.email}">Email</div>
+                        </div>
+                    </div>
+                    <div th:if="${canManageMembers}">
+                        <form th:action="@{/projects/{id}/members/remove(id=${project.id})}" method="post" onsubmit="return confirm('Loại bỏ thành viên này khỏi dự án?')">
+                            <input type="hidden" name="userId" th:value="${member.user.id}">
+                            <button type="submit" class="btn-remove">Gỡ bỏ</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>

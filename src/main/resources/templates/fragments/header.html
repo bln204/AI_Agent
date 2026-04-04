@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <div th:fragment="header(title, subtitle)" class="docs-header">
+        <div>
+            <h1 th:text="${title}">Tiêu đề</h1>
+            <p th:if="${subtitle != null}" class="docs-subtitle" th:text="${subtitle}">Phụ đề</p>
+        </div>
+        <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
+            <!-- Global search or specific actions can go here -->
+            <div th:if="${currentUser != null}" class="user-badge" style="display: flex; align-items: center; gap: 8px; background: #f3f4f6; padding: 6px 12px; border-radius: 9999px; font-size: 0.85rem; font-weight: 500;">
+                <span th:text="${currentUser.username}">User</span>
+                <span style="color: #6b7280; font-size: 0.75rem;" th:text="${'(' + currentUser.role.name + ')'}">(Vai trò)</span>
+            </div>
+            
+            <button class="btn-toggle-sidebar" id="toggleSidebar" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+        </div>
+    </div>
+</body>
+</html>

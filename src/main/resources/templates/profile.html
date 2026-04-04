@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hồ Sơ - AI Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/profile.css">
+</head>
+<body>
+<div class="profile-page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo"><span>🤖</span><span>AI Agent</span></div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Trợ lý AI</span>
+            </a>
+
+            <a th:if="${userRole != 'Nhân viên'}" href="/documents" class="nav-item" id="navDocs">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Tài Liệu</span>
+            </a>
+            <a href="/profile" class="nav-item active">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Hồ Sơ</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <form th:action="@{/logout}" method="post" style="margin: 0; display: inline-block; width: 100%;">
+                <button type="submit" class="btn-logout" style="border: none; cursor: pointer; width: 100%; justify-content: flex-start; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Đăng xuất
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="profile-main">
+        <div class="profile-header-bar">
+            <h1>Hồ Sơ Cá Nhân</h1>
+            <p>Cập nhật thông tin cá nhân của bạn</p>
+        </div>
+
+        <!-- Alert messages -->
+        <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
+        <div th:if="${error}"   class="alert alert-error"   th:text="${error}"></div>
+
+        <div class="profile-card">
+            <!-- Avatar Section -->
+            <div class="avatar-section">
+                <div class="avatar-preview" id="avatarPreview">
+                    <img th:if="${user.avatarUrl != null and !#strings.isEmpty(user.avatarUrl)}"
+                         th:src="${user.avatarUrl}" alt="Avatar" id="avatarImg" class="avatar-img">
+                    <span th:unless="${user.avatarUrl != null and !#strings.isEmpty(user.avatarUrl)}"
+                          class="avatar-letter" id="avatarLetter"
+                          th:text="${#strings.substring(user.username,0,1).toUpperCase()}">U</span>
+                </div>
+                <div class="avatar-info">
+                    <h3 th:text="${user.username}">Username</h3>
+                    <span class="badge dept" th:text="${user.department != null ? user.department.name : 'Chưa cập nhật'}">Phòng ban</span>
+                    <span class="badge role" th:text="${user.role != null ? user.role.name : 'Nhân viên'}">Role</span>
+                </div>
+            </div>
+
+            <!-- Profile Form -->
+            <form th:action="@{/profile}" method="post" class="profile-form">
+                <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+
+                <div class="form-grid">
+                    <!-- Chỉnh sửa được -->
+                    <div class="form-group">
+                        <label for="username">Tên Hiển Thị <span class="required">*</span></label>
+                        <input type="text" id="username" name="username"
+                               th:value="${user.username}" required
+                               placeholder="Tên của bạn">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="avatarUrl">URL Ảnh Đại Diện</label>
+                        <input type="url" id="avatarUrl" name="avatarUrl"
+                               th:value="${user.avatarUrl}"
+                               placeholder="https://example.com/avatar.jpg"
+                               oninput="previewAvatar(this.value)">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="description">Mô Tả Bản Thân</label>
+                        <textarea id="description" name="description" rows="4"
+                                  placeholder="Giới thiệu ngắn về bạn..."
+                                  th:text="${user.description}"></textarea>
+                    </div>
+
+                    <!-- Chỉ xem — DISABLED -->
+                    <div class="form-group disabled-section">
+                        <label>Phòng Ban</label>
+                        <div class="disabled-note">🔒 Không thể thay đổi</div>
+                        <input type="text" disabled
+                               th:value="${user.department != null ? user.department.name : 'Chưa cập nhật'}">
+                    </div>
+
+                    <div class="form-group disabled-section">
+                        <label>Chức Vụ</label>
+                        <div class="disabled-note">🔒 Không thể thay đổi</div>
+                        <input type="text" disabled
+                               th:value="${user.role != null ? user.role.name : 'Nhân viên'}">
+                    </div>
+
+                    <div class="form-group disabled-section">
+                        <label>Email</label>
+                        <div class="disabled-note">🔒 Không thể thay đổi</div>
+                        <input type="email" disabled th:value="${user.email}">
+                    </div>
+
+                    <div class="form-group disabled-section">
+                        <label>Trạng Thái</label>
+                        <div class="disabled-note">🔒 Không thể thay đổi</div>
+                        <input type="text" disabled th:value="${user.status}">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <a href="/dashboard" class="btn-cancel">Hủy</a>
+                    <button type="submit" class="btn-save">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Lưu Thay Đổi
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+
+<script>
+function previewAvatar(url) {
+    const preview = document.getElementById('avatarPreview');
+    const letter  = document.getElementById('avatarLetter');
+    let img = document.getElementById('avatarImg');
+    if (url && url.trim()) {
+        if (!img) {
+            img = document.createElement('img');
+            img.id = 'avatarImg';
+            img.className = 'avatar-img';
+            preview.innerHTML = '';
+            preview.appendChild(img);
+        }
+        img.src = url;
+        if (letter) letter.style.display = 'none';
+    } else {
+        if (img) img.remove();
+        if (letter) letter.style.display = 'flex';
+    }
+}
+</script>
+</body>
+</html>
