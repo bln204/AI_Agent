@@ -21,14 +21,19 @@ function setupEventListeners() {
     // New chat
     document.getElementById('newChatBtn')?.addEventListener('click', startNewChat);
 
-    // Nhấn Enter gửi tin nhắn (Shift+Enter xuống dòng)
-    document.getElementById('messageInput')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-    document.getElementById('messageInput')?.addEventListener('input', autoResizeTextarea);
+    // Unbind possible existing listeners before binding to prevent duplicates
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        // We use a named function for the listener so we could remove it if needed, 
+        // but since setupEventListeners is only called once on DOMContentLoaded, we'll just ensure it's clean.
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        messageInput.addEventListener('input', autoResizeTextarea);
+    }
 }
 
 function autoResizeTextarea() {
@@ -105,7 +110,7 @@ async function startNewChat() {
     try {
         const res = await fetch('/api/chat/sessions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
             body: JSON.stringify({ title: 'Cuộc trò chuyện mới' })
         });
         const session = await res.json();
@@ -130,46 +135,98 @@ async function startNewChat() {
 
 // ═══ Send Message ═══
 async function sendMessage() {
-    const input = document.getElementById('messageInput');
-    const content = input?.value.trim();
-    if (!content || isTyping) return;
-
-    // Tạo session nếu chưa có
-    if (!currentSessionId) {
-        await startNewChat();
+    // 1. ATOMIC GUARD: Check isTyping immediately
+    if (isTyping) {
+        console.warn("[UI-GUARD] Blocking double submit.");
+        return;
     }
 
-    // Ẩn welcome screen
-    document.getElementById('welcomeScreen')?.remove();
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn'); // Optional send button
+    const content = input?.value.trim();
+    if (!content) return;
 
-    // Hiển thị tin nhắn user ngay
-    appendMessageBubble('USER', content);
-    input.value = '';
-    autoResizeTextarea();
-
-    // Typing indicator
-    showTyping();
+    // 2. LOCK UI: Disable interactions immediately
     isTyping = true;
+    if (sendBtn) sendBtn.disabled = true;
+    if (input) input.disabled = true;
+
+    // 3. Create Session if needed
+    if (!currentSessionId) {
+        try {
+            await startNewChat();
+        } catch (e) {
+            console.error('Lỗi tạo session:', e);
+            isTyping = false;
+            if (sendBtn) sendBtn.disabled = false;
+            if (input) input.disabled = false;
+            return;
+        }
+    }
+
+    // 4. Generate SINGLE idempotency key for this user action
+    const idempotencyKey = window.crypto?.randomUUID ? window.crypto.randomUUID() : 
+                          (Date.now().toString(36) + Math.random().toString(36).substring(2));
+
+    // 5. Update UI
+    document.getElementById('welcomeScreen')?.remove();
+    appendMessageBubble('USER', content);
+    if (input) {
+        input.value = '';
+        autoResizeTextarea();
+    }
+    showTyping();
 
     try {
         const res = await fetch(`/api/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content })
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+            body: JSON.stringify({ content, idempotencyKey })
         });
+        
+        if (res.status === 409) {
+            removeTyping();
+            appendMessageBubble('AI', '⚠️ Hệ thống đang xử lý một câu hỏi khác trong cuộc trò chuyện này. Vui lòng đợi.');
+            return;
+        }
+
         const data = await res.json();
-
         removeTyping();
-        appendMessageBubble('AI', data.aiMessage.content);
 
-        // Cập nhật title session nếu là tin nhắn đầu
+        // Validate contract before render
+        if (!data || typeof data.status !== 'string') {
+            console.error('Invalid API response contract:', data);
+            appendMessageBubble('AI', '❌ Lỗi hệ thống: Phản hồi không hợp lệ.');
+            return;
+        }
+
+        // Render by status
+        if (data.status === 'COMPLETED') {
+            if (!data.content || !data.content.trim()) {
+                appendMessageBubble('AI', '❌ Phản hồi từ hệ thống bị rỗng.');
+                return;
+            }
+            appendMessageBubble('AI', data.content);
+        } else if (data.status === 'FAILED' || data.status === 'RETRYABLE_ERROR') {
+            const errorMsg = resolveErrorMessage(data.errorCode, data.retryable);
+            appendMessageBubble('AI', '❌ ' + errorMsg);
+        } else {
+            appendMessageBubble('AI', '❌ Trạng thái phản hồi không hợp lệ: ' + data.status);
+        }
+
         await loadChatSessions();
     } catch (e) {
         removeTyping();
         appendMessageBubble('AI', '❌ Lỗi kết nối. Vui lòng thử lại.');
+        console.error('Send error:', e);
     } finally {
+        // 6. UNLOCK UI
         isTyping = false;
-        input.focus();
+        if (sendBtn) sendBtn.disabled = false;
+        if (input) {
+            input.disabled = false;
+            input.focus();
+        }
     }
 }
 
@@ -273,7 +330,6 @@ function scrollToBottom() {
     const container = document.getElementById('chatMessages');
     if (container) container.scrollTop = container.scrollHeight;
 }
-
 function formatMessage(text) {
     // Basic markdown-like formatting
     return escapeHtml(text)
@@ -281,6 +337,25 @@ function formatMessage(text) {
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
         .replace(/\n/g, '<br>');
+}
+
+function resolveErrorMessage(errorCode, retryable) {
+    switch (errorCode) {
+        case 'AI_RATE_LIMIT':
+            return 'Hệ thống đang bận, vui lòng thử lại sau.';
+        case 'AI_QUOTA_EXCEEDED':
+            return 'Hệ thống đã hết quota xử lý.';
+        case 'EMPTY_COMPLETED_CONTENT':
+            return 'Phản hồi hệ thống không hợp lệ.';
+        case 'SESSION_BUSY':
+            return 'Hệ thống đang xử lý một câu hỏi khác trong cuộc trò chuyện này. Vui lòng đợi.';
+        case 'MISSING_IDEMPOTENCY_KEY':
+            return 'Yêu cầu không hợp lệ: thiếu khóa định danh.';
+        default:
+            return retryable
+                ? 'Tạm thời không xử lý được, vui lòng thử lại.'
+                : 'Đã xảy ra lỗi hệ thống.';
+    }
 }
 
 function escapeHtml(str) {

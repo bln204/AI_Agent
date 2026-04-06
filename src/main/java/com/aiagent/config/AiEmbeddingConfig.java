@@ -13,20 +13,27 @@ public class AiEmbeddingConfig {
 
     @Bean
     public EmbeddingModel embeddingModel() throws Exception {
-        // Cấu hình Local HuggingFace Embedding Model
+        // --- 1. Force ONNX Engine to prevent PyTorch initialization issues ---
+        System.setProperty("DJL_DEFAULT_ENGINE", "OnnxRuntime");
+        
+        // --- 2. Synchronized Eager Initialization ---
+        log.info("⏳ Initializing Local Transformers Embedding Model (ONNX)...");
         TransformersEmbeddingModel embeddingModel = new TransformersEmbeddingModel();
         
-        // Mặc định nó sẽ tải model "sentence-transformers/all-MiniLM-L6-v2" (384 dimensions)
-        // Cache của model này sẽ nằm trong thư mục cấu hình ở application.properties (ví dụ: C:/temp/spring-ai-cache)
-        // Bạn có thể xem thư mục này để biết tên và version của HF model đang dùng.
-        
-        // Bạn có thể chỉ định explicit model name nếu muốn:
-        // embeddingModel.setModelResource("https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2");
-        
-        // Bắt buộc gọi afterPropertiesSet() để tải và init model ONNX vào Memory
-        embeddingModel.afterPropertiesSet();
-        
-        log.info("🚀 Local HuggingFace Embedding Model has been initialized successfully!");
+        try {
+            // This loads the model resources and initializes the engine
+            embeddingModel.afterPropertiesSet();
+            
+            // --- 3. Warm-up Call ---
+            // Force native libraries to load and GPU/CPU delegate to bind early
+            log.info("🔥 Warming up embedding model with dummy request...");
+            embeddingModel.embed("warmup");
+            
+            log.info("🚀 Local Transformers Embedding Model has been initialized and warmed up successfully!");
+        } catch (Exception e) {
+            log.error("❌ Failed to initialize Transformers Embedding Model: {}", e.getMessage(), e);
+            throw e;
+        }
         
         return embeddingModel;
     }

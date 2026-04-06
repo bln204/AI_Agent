@@ -14,10 +14,12 @@ import java.util.Map;
 import java.util.HashMap;
 
 
+import org.springframework.retry.annotation.EnableRetry;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
 @Slf4j
+@EnableRetry
 public class AiConfig {
 
     @Value("${qdrant.host}")

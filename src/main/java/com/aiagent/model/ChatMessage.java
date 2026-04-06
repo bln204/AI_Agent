@@ -30,6 +30,22 @@ public class ChatMessage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 32, nullable = false)
+    private MessageStatus status;
+
+    @Column(name = "sequence_number")
+    private Long sequenceNumber;
+
+    @Column(name = "error_code", length = 64)
+    private String errorCode;
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

@@ -203,8 +203,11 @@
 
                         <!-- Management actions for DIRECTOR only -->
                         <th:block th:if="${canManage}">
-                            <button class="btn-action" 
-                                    th:onclick="|openEditModal(${proj.id}, '${proj.name}', '${proj.description}', ${proj.active})|">
+                            <button class="btn-action btn-edit-project"
+                                    th:data-id="${proj.id}"
+                                    th:data-name="${proj.name}"
+                                    th:data-desc="${proj.description}"
+                                    th:data-active="${proj.active}">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 Sửa
                             </button>
@@ -291,13 +294,22 @@
     function closeModal(id) {
         document.getElementById(id).style.display = 'none';
     }
-    function openEditModal(id, name, desc, active) {
-        document.getElementById('editForm').action = '/projects/' + id + '/update';
-        document.getElementById('editName').value = name;
-        document.getElementById('editDesc').value = desc;
-        document.getElementById('editActive').checked = active;
-        openModal('editModal');
-    }
+
+    // Use data attributes instead of inline th:onclick string interpolation
+    // to prevent JS injection/crash when project name/description contains quotes
+    document.querySelectorAll('.btn-edit-project').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = this.dataset.id;
+            var name = this.dataset.name || '';
+            var desc = this.dataset.desc || '';
+            var active = this.dataset.active === 'true';
+            document.getElementById('editForm').action = '/projects/' + id + '/update';
+            document.getElementById('editName').value = name;
+            document.getElementById('editDesc').value = desc;
+            document.getElementById('editActive').checked = active;
+            openModal('editModal');
+        });
+    });
 
     // Close on outside click
     window.onclick = function(event) {

@@ -79,21 +79,13 @@ public class Document {
     private LocalDateTime updatedAt;
 
     @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updateNormalizedTitle();
-    }
-
     @PreUpdate
-    protected void onUpdate() {
+    protected void onPersistOrUpdate() {
+        if (createdAt == null) createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        updateNormalizedTitle();
-    }
-
-    private void updateNormalizedTitle() {
+        
         if (title != null) {
-            String temp = java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFD);
-            this.normalizedTitle = temp.replaceAll("\\p{M}", "").toLowerCase();
+            this.normalizedTitle = com.aiagent.util.NormalizationUtils.normalize(this.title);
         }
     }
 }

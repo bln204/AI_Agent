@@ -13,14 +13,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-@Transactional
 public class RagIntegrationTest {
 
     @Autowired
@@ -59,18 +56,23 @@ public class RagIntegrationTest {
                     return roleRepository.save(r);
                 });
 
-        testUser = new User();
-        testUser.setUsername("testuser_rag");
-        testUser.setEmail("test_rag@aiagent.com");
-        testUser.setPassword("password");
-        testUser.setStatus("ACTIVE");
-        testUser.setDepartment(hrDept);
-        testUser.setRole(role);
-        testUser = userRepository.save(testUser);
+        testUser = userRepository.findByEmail("test_rag@aiagent.com")
+                .orElseGet(() -> {
+                    User u = new User();
+                    u.setUsername("testuser_rag");
+                    u.setEmail("test_rag@aiagent.com");
+                    u.setPassword("password");
+                    u.setStatus("ACTIVE");
+                    u.setDepartment(hrDept);
+                    u.setRole(role);
+                    return userRepository.save(u);
+                });
     }
 
     @Test
     void testIngestAndChat() throws IOException {
+        String uniqueSuffix = "_" + System.currentTimeMillis();
+        String fileName = "rules" + uniqueSuffix + ".txt";
         String sampleContent = "Nội quy công ty AI Agent: " +
                 "- Lương tháng 13 sẽ được chi trả vào ngày 25/12 hàng năm. " +
                 "- Nhân viên được nghỉ phép 15 ngày/năm. " +
@@ -78,15 +80,15 @@ public class RagIntegrationTest {
 
         MockMultipartFile mockFile = new MockMultipartFile(
                 "file",
-                "rules.txt",
+                fileName,
                 "text/plain",
                 sampleContent.getBytes());
 
-        logInferred("Ingesting rules.txt...");
+        logInferred("Ingesting " + fileName + "...");
 
         // SỬA Ở ĐÂY: Dùng department ID (list)
-        documentService.uploadDocument(
-                "rules.txt", 
+        com.aiagent.model.Document uploadedDoc = documentService.uploadDocument(
+                fileName, 
                 null, 
                 java.util.List.of(hrDept.getId()), 
                 java.util.Collections.emptyList(), 
@@ -94,10 +96,20 @@ public class RagIntegrationTest {
                 mockFile, 
                 testUser);
 
+        // [INGESTION-WAIT] documentIngestionService.ingestDocument is @Async. 
+        // We must wait for it to finish vectorizing before we can chat.
+        try {
+            logInferred("Waiting for async ingestion...");
+            Thread.sleep(5000); 
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         // 4. Perform a chat query
         String question = "Lương tháng 13 được trả khi nào?";
         logInferred("Asking: " + question);
-        String response = aiChatService.chat(1L, question, testUser.getId(), null);
+        ChatGenerationResult result = aiChatService.chat(uploadedDoc.getId(), question, testUser, null);
+        String response = result.getContent();
 
         System.out.println("AI Response: " + response);
 

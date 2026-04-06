@@ -19,6 +19,12 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     @Query("SELECT DISTINCT d FROM Document d LEFT JOIN FETCH d.departments")
     List<Document> findAllWithDepartments();
 
+    @Query("SELECT DISTINCT d FROM Document d " +
+           "LEFT JOIN FETCH d.departments " +
+           "LEFT JOIN FETCH d.projects " +
+           "LEFT JOIN FETCH d.uploadedBy")
+    List<Document> findAllForReindexing();
+
     List<Document> findByUploadedBy(User user);
 
     /**
@@ -91,8 +97,20 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
            "AND d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC")
     Page<Document> findPublicDocuments(@Param("keyword") String keyword, Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT d FROM Document d LEFT JOIN d.departments dept LEFT JOIN d.projects proj WHERE " +
-           "(:keyword IS NULL OR LOWER(d.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(d.normalizedTitle) LIKE CONCAT('%', :keyword, '%')) " +
+    @Query("SELECT d FROM Document d WHERE d.normalizedTitle = :normalizedTitle")
+    List<Document> findByNormalizedTitle(@Param("normalizedTitle") String normalizedTitle);
+
+    @Query("SELECT d FROM Document d WHERE d.normalizedTitle LIKE %:keyword%")
+    List<Document> findByNormalizedTitleContaining(@Param("keyword") String keyword);
+
+    @Query(value = "SELECT DISTINCT d FROM Document d " +
+           "LEFT JOIN d.departments dept " +
+           "LEFT JOIN d.projects proj " +
+           "WHERE (" +
+           "  LOWER(d.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "  OR d.normalizedTitle LIKE CONCAT('%', :keyword, '%') " +
+           "  OR LOWER(d.content) LIKE LOWER(CONCAT('%', :keyword, '%'))" +
+           ") " +
            "AND (:roleCode = 'DIRECTOR' " +
            "  OR d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND dept.id = :departmentId) " +

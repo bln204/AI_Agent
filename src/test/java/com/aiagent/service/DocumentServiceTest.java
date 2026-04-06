@@ -10,16 +10,17 @@ import com.aiagent.rag.DocumentIngestionService;
 import com.aiagent.util.RoleConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 class DocumentServiceTest {
@@ -39,12 +40,16 @@ class DocumentServiceTest {
     @Mock
     private com.aiagent.repository.ProjectRepository projectRepository;
 
-    @InjectMocks
     private DocumentService documentService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy
+        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, accessPolicyService);
+        
+        // Fix @Value field
+        ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");
     }
 
     @Test
@@ -83,6 +88,12 @@ class DocumentServiceTest {
 
         when(accessPolicyService.canUpload(uploader)).thenReturn(true);
         when(departmentRepository.findById(10L)).thenReturn(Optional.of(dept));
+        // Fix: Mock findAllById which is used to populate doc.setDepartments
+        when(departmentRepository.findAllById(anyList())).thenAnswer(invocation -> {
+            java.util.List<Long> ids = invocation.getArgument(0);
+            if (ids.contains(10L)) return java.util.List.of(dept);
+            return java.util.Collections.emptyList();
+        });
 
         Document mockedDoc = new Document();
         mockedDoc.setId(10L);
@@ -113,6 +124,11 @@ class DocumentServiceTest {
         
         when(accessPolicyService.canUpload(uploader)).thenReturn(true);
         when(departmentRepository.findById(100L)).thenReturn(Optional.of(targetDept));
+        when(departmentRepository.findAllById(anyList())).thenAnswer(invocation -> {
+            java.util.List<Long> ids = invocation.getArgument(0);
+            if (ids.contains(100L)) return java.util.List.of(targetDept);
+            return java.util.Collections.emptyList();
+        });
 
         Document mockedDoc = new Document();
         mockedDoc.setId(10L);

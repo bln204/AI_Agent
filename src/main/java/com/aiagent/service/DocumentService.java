@@ -43,6 +43,7 @@ public class DocumentService {
         }
 
         if (user == null) {
+            log.debug("[DOC-ACCESS] user=null → returning PUBLIC docs only, keyword={}", normalizedKeyword);
             return documentRepository.findPublicDocuments(normalizedKeyword, pageable);
         }
 
@@ -50,16 +51,21 @@ public class DocumentService {
         Long userId = user.getId();
         Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : -1L;
 
+        log.debug("[DOC-ACCESS] userId={}, roleCode={}, deptId={}, keyword={}", userId, roleCode, deptId, normalizedKeyword);
+
         if (RoleConstants.ROLE_DIRECTOR.equals(roleCode)) {
+            log.debug("[DOC-ACCESS] DIRECTOR path → returning ALL docs");
             return documentRepository.findAllAccessibleForDirector(normalizedKeyword, pageable);
         }
 
-        return documentRepository.findAccessibleDocumentsPaginated(
+        Page<Document> result = documentRepository.findAccessibleDocumentsPaginated(
                 userId,
                 deptId,
                 roleCode,
                 normalizedKeyword,
                 pageable);
+        log.debug("[DOC-ACCESS] Found {} accessible documents for user {}", result.getTotalElements(), userId);
+        return result;
     }
 
     @Transactional
@@ -89,6 +95,13 @@ public class DocumentService {
         doc.setAccessLevel(accessLevel != null ? accessLevel : AccessLevel.DEPARTMENT);
         doc.setUploadedBy(uploader);
 
+        // Security Guard: Manager restriction to own department (Constraint from established business rules)
+        if (RoleConstants.ROLE_MANAGER.equals(uploader.getRole().getCode()) && uploader.getDepartment() != null) {
+            log.info("[SECURITY-ENFORCE] Restricting MANAGER {} to upload only to department: {}", 
+                    uploader.getEmail(), uploader.getDepartment().getCode());
+            departmentIds = java.util.List.of(uploader.getDepartment().getId());
+        }
+
         // Set departments metadata (even if not strictly used for access, e.g. in PUBLIC/PRIVATE)
         if (departmentIds != null && !departmentIds.isEmpty()) {
             doc.setDepartments(new java.util.HashSet<>(departmentRepository.findAllById(departmentIds)));
@@ -108,10 +121,31 @@ public class DocumentService {
 
             documentRepository.save(savedDoc);
 
+            // CRITICAL FIX: Eagerly resolve all lazy-loaded associations BEFORE
+            // calling the @Async method. The Hibernate session will be closed
+            // by the time the async thread executes.
+            java.util.List<Long> resolvedDeptIds = savedDoc.getDepartments().stream()
+                    .map(com.aiagent.model.Department::getId)
+                    .collect(java.util.stream.Collectors.toList());
+            java.util.List<Long> resolvedProjIds = savedDoc.getProjects().stream()
+                    .map(com.aiagent.model.Project::getId)
+                    .collect(java.util.stream.Collectors.toList());
+            String resolvedAccessLevel = savedDoc.getAccessLevel() != null 
+                    ? savedDoc.getAccessLevel().name() : "PUBLIC";
+            String resolvedTitle = savedDoc.getTitle();
+            String resolvedFileType = savedDoc.getFileType();
+            Long resolvedDocId = savedDoc.getId();
+
+            log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
+                    resolvedDocId, resolvedTitle, resolvedAccessLevel, resolvedDeptIds, resolvedProjIds);
+
             try {
-                documentIngestionService.ingestDocument(savedDoc, uploader.getId());
+                documentIngestionService.ingestDocument(
+                        savedPath, resolvedDocId, resolvedTitle, resolvedFileType,
+                        uploader.getId(), resolvedAccessLevel,
+                        resolvedDeptIds, resolvedProjIds);
             } catch (Exception e) {
-                log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
+                log.error("Ingestion vào Qdrant thất bại cho document {}: {}", resolvedDocId, e.getMessage());
             }
         }
 

@@ -32,6 +32,9 @@ public class ChatSession {
 
     private LocalDateTime updatedAt;
 
+    @Column(name = "last_sequence_number")
+    private Long lastSequenceNumber = 0L;
+
     @Version
     private Integer version;
 

@@ -3,6 +3,7 @@ package com.aiagent.controller;
 import com.aiagent.model.ChatMessage;
 import com.aiagent.model.User;
 import com.aiagent.rag.AiChatService;
+import com.aiagent.rag.ChatGenerationResult;
 
 import com.aiagent.repository.UserRepository;
 import com.aiagent.service.ChatService;
@@ -58,8 +59,8 @@ public class AiController {
             if (request.getSessionId() != null) {
                 history = chatService.getMessages(request.getSessionId());
             }
-            String response = aiChatService.chat(request.getSessionId(), request.getQuestion(), user.getId(), history);
-            return ResponseEntity.ok(new ChatResponse(response));
+            ChatGenerationResult result = aiChatService.chat(request.getSessionId(), request.getQuestion(), user, history);
+            return ResponseEntity.ok(new ChatResponse(result.getContent()));
         } catch (Exception e) {
             log.error("Error during AI chat", e);
             return ResponseEntity.internalServerError().body(new ChatResponse("Error: " + e.getMessage()));

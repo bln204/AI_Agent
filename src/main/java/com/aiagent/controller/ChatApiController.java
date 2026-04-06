@@ -1,24 +1,29 @@
 package com.aiagent.controller;
 
+import com.aiagent.dto.ChatMessageDto;
+import com.aiagent.dto.ChatMessageResponse;
 import com.aiagent.model.ChatMessage;
 import com.aiagent.model.ChatSession;
+import com.aiagent.model.MessageStatus;
 import com.aiagent.model.User;
 import com.aiagent.repository.UserRepository;
 import com.aiagent.service.ChatService;
 import com.aiagent.rag.AiChatService;
+import com.aiagent.rag.ChatGenerationResult;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
+@Slf4j
 public class ChatApiController {
 
     private final ChatService chatService;
@@ -47,18 +52,31 @@ public class ChatApiController {
 
     // Lấy messages của 1 session
     @GetMapping("/sessions/{id}/messages")
-    public ResponseEntity<List<ChatMessage>> getMessages(@PathVariable Long id, Authentication authentication) {
+    public ResponseEntity<List<ChatMessageDto>> getMessages(@PathVariable Long id, Authentication authentication) {
         User user = resolveUser(authentication);
         if (user == null) return ResponseEntity.status(401).build();
-        // Kiểm tra session thuộc về user này
         ChatSession session = chatService.getSession(id);
-        if (!session.getUser().getId().equals(user.getId())) return ResponseEntity.status(403).build();
-        return ResponseEntity.ok(chatService.getMessages(id));
+        if (session == null || !session.getUser().getId().equals(user.getId())) return ResponseEntity.status(403).build();
+        
+        List<ChatMessageDto> dtos = chatService.getMessages(id).stream()
+            .map(m -> new ChatMessageDto(
+                m.getId(),
+                m.getRole(),
+                m.getContent(),
+                m.getStatus().name(),
+                m.getErrorCode(),
+                false // History doesn't typically require real-time retry status
+            ))
+            .toList();
+            
+        return ResponseEntity.ok(dtos);
     }
 
-    // Gửi tin nhắn (user) và nhận AI response
+    // ============================================================
+    // HARDENED: Send message with idempotency + state machine
+    // ============================================================
     @PostMapping("/sessions/{id}/messages")
-    public ResponseEntity<Map<String, Object>> sendMessage(@PathVariable Long id,
+    public ResponseEntity<ChatMessageResponse> sendMessage(@PathVariable Long id,
                                                             @RequestBody Map<String, String> body,
                                                             Authentication authentication) {
         try {
@@ -71,31 +89,117 @@ public class ChatApiController {
             String content = body.getOrDefault("content", "").trim();
             if (content.isEmpty()) return ResponseEntity.badRequest().build();
 
-            // Fetch history BEFORE saving the current user message to avoid duplicate context
+            // Log normalized query for internal tracking
+            log.info("[CHAT] Received query for session {}: '{}' (normalized: '{}')", 
+                    id, content, com.aiagent.util.NormalizationUtils.normalize(content));
+
+            // MANDATORY: Idempotency key from client
+            String idempotencyKey = body.get("idempotencyKey");
+            if (idempotencyKey == null || idempotencyKey.isBlank()) {
+                log.warn("[SECURITY-GUARD] Rejecting request: missing idempotencyKey for session {}", id);
+                ChatMessage pseudoMsg = new ChatMessage();
+                pseudoMsg.setId(-1L);
+                pseudoMsg.setStatus(MessageStatus.FAILED);
+                pseudoMsg.setErrorCode("MISSING_IDEMPOTENCY_KEY");
+                pseudoMsg.setContent("Yêu cầu không hợp lệ: thiếu khóa định danh.");
+                return ResponseEntity.ok(toResponse(pseudoMsg, false));
+            }
+
+            // ─── PHASE 1: Atomic Start Turn (DB Transaction + Lock) ───
+            ChatService.TurnResult turnResult;
+            try {
+                turnResult = chatService.startTurn(id, content, idempotencyKey);
+            } catch (IllegalStateException busyEx) {
+                if ("SESSION_BUSY".equals(busyEx.getMessage())) {
+                    log.warn("Concurrency hit (409 Conflict -> 200 State): session={}, key={}", id, idempotencyKey);
+                    ChatMessage pseudoMsg = new ChatMessage();
+                    pseudoMsg.setId(-1L);
+                    pseudoMsg.setStatus(MessageStatus.FAILED);
+                    pseudoMsg.setErrorCode("SESSION_BUSY");
+                    pseudoMsg.setContent("Hệ thống đang xử lý một câu hỏi khác trong cuộc trò chuyện này. Vui lòng đợi.");
+                    return ResponseEntity.ok(toResponse(pseudoMsg, false));
+                }
+                throw busyEx;
+            }
+
+            // If this idempotencyKey was already processed or is running:
+            if (turnResult.alreadyProcessed()) {
+                ChatMessage existingAi = turnResult.aiPlaceholder();
+
+                if (existingAi != null && existingAi.getStatus() == MessageStatus.COMPLETED) {
+                    log.info("Idempotency hit (COMPLETED): session={}, key={}", id, idempotencyKey);
+                    return ResponseEntity.ok(toResponse(existingAi, false));
+                }
+
+                if (existingAi != null && existingAi.getStatus() == MessageStatus.IN_PROGRESS) {
+                    log.info("Idempotency hit (IN_PROGRESS): session={}, key={}", id, idempotencyKey);
+                    // Standardize IN_PROGRESS response as well or fallback to simple map if it's transitory.
+                    // For consistency, let's use toResponse with a pseudo-retryable flag if needed.
+                    return ResponseEntity.ok(toResponse(existingAi, false));
+                }
+                
+                // For RETRYABLE_ERROR or FAILED, we fall through and allow PHASE 2 to rerun 
+                // using the existing placeholder.
+                if (existingAi != null && (existingAi.getStatus() == MessageStatus.RETRYABLE_ERROR || existingAi.getStatus() == MessageStatus.FAILED)) {
+                    log.info("Idempotency hit (RETRYABLE/FAILED -> RETRYING): session={}, key={}, status={}", 
+                            id, idempotencyKey, existingAi.getStatus());
+                }
+            }
+
+            // ─── PHASE 2: AI Processing (Outside lock) ───
+            ChatMessage aiPlaceholder = turnResult.aiPlaceholder();
             List<ChatMessage> history = chatService.getMessages(id);
-
-            // Lưu tin nhắn của user
-            ChatMessage userMsg = chatService.addMessage(id, "USER", content);
-
-            // Call RAG AI Service
-            String aiResponse = aiChatService.chat(id, content, user.getId(), history);
             
-            // Lưu tin nhắn của AI
-            ChatMessage aiMsg = chatService.addMessage(id, "AI", aiResponse);
+            // If we have an existing AI placeholder from a previous RETRYABLE_ERROR or IN_PROGRESS,
+            // we proceed to call AI again.
+            ChatGenerationResult result = aiChatService.chat(id, content, user, history);
 
-            return ResponseEntity.ok(Map.of(
-                "userMessage", Map.of("id", userMsg.getId(), "role", "USER", "content", content),
-                "aiMessage",   Map.of("id", aiMsg.getId(),   "role", "AI",   "content", aiResponse)
-            ));
+            // ─── PHASE 3: Finalize Turn ───
+            ChatMessage aiMsg = chatService.finalizeTurn(
+                aiPlaceholder.getId(), 
+                result.getContent(), 
+                result.getStatus(),
+                result.getErrorCode(),
+                result.getErrorMessage()
+            );
+
+            return ResponseEntity.ok(toResponse(aiMsg, result.isRetryable()));
+
         } catch (Exception e) {
-            // Log chi tiết lỗi và trả về JSON thân thiện để frontend không bị SyntaxError parse HTML 500
-            System.err.println("Exception in ChatApiController: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.ok(Map.of(
-                "error", true,
-                "aiMessage", Map.of("id", -1, "role", "AI", "content", "Xin lỗi, đã có lỗi hệ thống xảy ra. Vui lòng thử lại sau.")
-            ));
+            log.error("Exception in ChatApiController.sendMessage: {}", e.getMessage(), e);
+            // Create a pseudo-message for controlled failure response
+            ChatMessage errorMsg = new ChatMessage();
+            errorMsg.setId(-1L);
+            errorMsg.setStatus(MessageStatus.FAILED);
+            errorMsg.setContent("Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.");
+            errorMsg.setErrorCode("INTERNAL_SERVER_ERROR");
+            return ResponseEntity.ok(toResponse(errorMsg, false));
         }
+    }
+
+    private ChatMessageResponse toResponse(ChatMessage aiMsg, boolean retryable) {
+        // Enforce guard for invalid completed state
+        if (aiMsg.getStatus() == MessageStatus.COMPLETED && (aiMsg.getContent() == null || aiMsg.getContent().isBlank())) {
+            log.error("[CRITICAL] EMPTY CONTENT WITH COMPLETED STATUS - MessageId={}", aiMsg.getId());
+            aiMsg.setStatus(MessageStatus.FAILED);
+            aiMsg.setErrorCode("EMPTY_COMPLETED_CONTENT");
+            aiMsg.setContent("Hệ thống chưa tạo được phản hồi hợp lệ.");
+        }
+
+        log.info("[API-RESPONSE] messageId={}, status={}, contentLen={}, errorCode={}, retryable={}",
+            aiMsg.getId(), 
+            aiMsg.getStatus(), 
+            (aiMsg.getContent() != null ? aiMsg.getContent().length() : 0),
+            aiMsg.getErrorCode(), 
+            retryable);
+
+        return new ChatMessageResponse(
+            aiMsg.getId(),
+            aiMsg.getStatus().name(),
+            aiMsg.getContent(),
+            aiMsg.getErrorCode(),
+            retryable
+        );
     }
 
     // Xóa session
@@ -109,7 +213,9 @@ public class ChatApiController {
         return ResponseEntity.noContent().build();
     }
 
-
+    // ============================================================
+    // Helper Methods
+    // ============================================================
     private User resolveUser(Authentication authentication) {
         if (authentication == null) return null;
         Object principal = authentication.getPrincipal();

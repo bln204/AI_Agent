@@ -39,7 +39,29 @@ public class DataMigrationService {
         // 4. Migrate Documents
         migrateDocuments(departments);
 
+        // 5. Rebuild Document Normalization (NEW)
+        rebuildDocumentNormalization();
+
         log.info("Data migration completed successfully.");
+    }
+
+    @Transactional
+    public void rebuildDocumentNormalization() {
+        log.info("Starting Document Normalization Rebuild...");
+        documentRepository.findAll().forEach(doc -> {
+            if (doc.getTitle() != null) {
+                String oldNormalized = doc.getNormalizedTitle();
+                String newNormalized = com.aiagent.util.NormalizationUtils.normalize(doc.getTitle());
+                
+                if (!newNormalized.equals(oldNormalized)) {
+                    log.debug("Updating normalized title for doc {}: '{}' -> '{}'", 
+                            doc.getId(), oldNormalized, newNormalized);
+                    doc.setNormalizedTitle(newNormalized);
+                    documentRepository.save(doc);
+                }
+            }
+        });
+        log.info("Document Normalization Rebuild completed.");
     }
 
     private Map<String, Role> seedRoles() {

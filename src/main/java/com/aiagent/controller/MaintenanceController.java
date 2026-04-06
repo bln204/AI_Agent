@@ -1,0 +1,63 @@
+package com.aiagent.controller;
+
+import com.aiagent.model.Document;
+import com.aiagent.repository.DocumentRepository;
+import com.aiagent.rag.DocumentIngestionService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/maintenance")
+@RequiredArgsConstructor
+@Slf4j
+public class MaintenanceController {
+
+    private final DocumentRepository documentRepository;
+    private final DocumentIngestionService ingestionService;
+
+    @PostMapping("/reindex")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    public ResponseEntity<String> reindexAll(@RequestParam(required = false, defaultValue = "company_documents") String collectionName) {
+        log.info("[MAINTENANCE] Starting global re-index into collection: '{}'...", collectionName);
+        
+        List<Document> documents = documentRepository.findAll();
+        log.info("[MAINTENANCE] Found {} documents to re-index.", documents.size());
+
+        // Note: Actual Collection switching should be done via application.properties or a DynamicVectorStore bean.
+        // For now, we just ingest with the same service which uses the configured vectorStore.
+        // In a true Phase 2 swap, we'd inject a second VectorStore bean targetting v2.
+
+        int count = 0;
+        for (Document doc : documents) {
+            try {
+                List<Long> deptIds = doc.getDepartments().stream().map(d -> d.getId()).collect(Collectors.toList());
+                List<Long> projIds = doc.getProjects().stream().map(p -> p.getId()).collect(Collectors.toList());
+                
+                ingestionService.ingestDocument(
+                    doc.getFilePath(),
+                    doc.getId(),
+                    doc.getTitle(),
+                    doc.getFileType(),
+                    doc.getUploadedBy().getId(),
+                    doc.getAccessLevel().name(),
+                    deptIds,
+                    projIds
+                );
+                count++;
+            } catch (Exception e) {
+                log.error("[MAINTENANCE] Failed to re-index document ID {}: {}", doc.getId(), e.getMessage());
+            }
+        }
+
+        return ResponseEntity.ok("Started re-indexing " + count + " documents in the background.");
+    }
+}

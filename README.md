@@ -35,6 +35,7 @@ Hệ thống quản lý tài liệu và trợ lý AI doanh nghiệp, tích hợp
 - Docker
 - MySQL 8
 - tạo folder uploads trong AI_Agent/uploads
+
 ---
 
 ## ⚡ 4 bước chạy project
@@ -86,21 +87,66 @@ GEMINI_BASE_URL=https://generativelanguage.googleapis.com
 
 ### 4. Tạo database
 
-  Tạo database tên là ai_agent
+Tạo database tên là ai_agent
+
 ```bash
 CREATE DATABASE ai_agent;
 ```
-  Sau đó vào MySQL 
-  Vào Server -> Data Import
-  Chọn Import from Self-Contained File
-  Chọn file database.sql
-  Chọn schema ai_agent
-  Bấm Start Import
+
+Sau đó vào MySQL
+Vào Server -> Data Import
+Chọn Import from Self-Contained File
+Chọn file database.sql
+Chọn schema ai_agent
+Bấm Start Import
+
 ### 5. Chạy Qdrant (bắt buộc)
 
 ```bash
 docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```
+
+Nếu khi run project và truy cập doc nhưng lỗi không trả response đúng dù log đã lấy được doc
+thì làm theo các bước bên dưới
+
+1. Xóa collection
+
+```bash
+iwr "http://localhost:6333/collections/company_documents" -Method DELETE -UseBasicParsing
+```
+
+Ở terminal sẽ nhận được câu hỏi và chọn Yes
+
+2. Kiểm tra đã xóa collection thành công chưa
+
+```bash
+iwr "http://localhost:6333/collections/company_documents" -Method GET -UseBasicParsing
+```
+
+Ở terminal trả về 404 - Not found --> nghĩa là đã xóa thành công
+
+3.  Ctrl + c đoạn code bên dưới và Ctrl + V vào cuối file application.properties
+
+```bash
+app.rag.reindex-on-startup=true
+```
+
+Sau đó start lại kiểm tra log và thấy các dòng log này
+[RAG-REINDEX-RUNNER] Startup re-indexing is ENABLED
+[RAG-REINDEX] Scanning database for documents to re-index...
+[RAG-REINDEX] Processing [1/X]: ID=..., Title='...'
+
+Mở terminal mới và Ctrl + V đoạn code bên dưới
+
+```bash
+(Invoke-WebRequest -Uri "http://localhost:6333/collections/company_documents" -UseBasicParsing).Content
+```
+
+Kiểm tra giá trị "point_count" > 0 là OK
+
+4. Test lại sẽ có response được trả về đúng
+
+### NOTE: KHI RESTART LẠI XONG THÌ XÓA DÒNG app.rag.reindex-on-startup=true đi vì mặc định là đã được set là false; VÀ CHỈ BẬT KHI RAG TRẢ RESPONSE "KHÔNG ĐỦ DỮ KIỆN..." HOẶC KHI THÊM DOCS MỚI VÀO MÀ CHƯA CÓ RESPONSE
 
 ### 6. Run project
 
