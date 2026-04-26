@@ -62,6 +62,40 @@ public class Document {
     @Column(nullable = false, length = 20)
     private AccessLevel accessLevel = AccessLevel.DEPARTMENT;
 
+    @Column(length = 255)
+    private String decision;
+
+    @Column(nullable = false, unique = true, length = 36)
+    private String documentUuid;
+
+    @Column(length = 20)
+    private String decisionNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private DocumentClassification classification = DocumentClassification.OTHER;
+
+    @Column(nullable = false)
+    private boolean internalSourceFlag = true;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(length = 100)
+    private String uploaderRole;
+
+    @Column(length = 100)
+    private String departmentName;
+
+    @Column(length = 100)
+    private String projectName;
+
+    @Column(nullable = false)
+    private Integer version = 1;
+
+    @Column(nullable = false)
+    private boolean isDeleted = false;
+
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)
@@ -84,8 +118,22 @@ public class Document {
         if (createdAt == null) createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         
+        if (documentUuid == null || documentUuid.isBlank()) {
+            documentUuid = java.util.UUID.randomUUID().toString();
+        }
+
         if (title != null) {
             this.normalizedTitle = com.aiagent.util.NormalizationUtils.normalize(this.title);
+        }
+
+        // Sync flattened fields for RAG if not set
+        if (uploadedBy != null) {
+            if (uploaderRole == null && uploadedBy.getRole() != null) {
+                uploaderRole = uploadedBy.getRole().getName();
+            }
+            if (departmentName == null && uploadedBy.getDepartment() != null) {
+                departmentName = uploadedBy.getDepartment().getName();
+            }
         }
     }
 }

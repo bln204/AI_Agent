@@ -4,166 +4,143 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tài Liệu - AI Agent</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/documents.css">
-    <link rel="stylesheet" href="/css/dashboard.css">
+    <div th:replace="~{fragments/head_links :: head_links}"></div>
 </head>
 <body>
-<div class="docs-page">
+<div class="docs-page flex h-screen overflow-hidden">
 
     <!-- Sidebar -->
     <div th:replace="~{fragments/sidebar :: sidebar('documents')}"></div>
 
     <!-- Main -->
-    <main class="docs-main">
+    <main class="docs-main flex-1 flex flex-col bg-slate-50 overflow-hidden">
         <!-- Header -->
         <div th:replace="~{fragments/header :: header('📚 Kho Tài Liệu', 'Tài liệu của bạn')}"></div>
 
-        <div class="docs-content" style="padding: 24px 0;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                <p class="docs-subtitle" style="margin: 0;">
-                    <th:block th:if="${currentUser != null}">
-                        <span th:text="${currentUser.department != null ? currentUser.department.name : 'Chưa cập nhật'}">Phòng ban</span>
-                    </th:block>
-                </p>
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <form action="/documents" method="get" style="margin: 0; display: flex; gap: 8px;">
+        <div class="docs-content flex-1 overflow-y-auto p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Tài liệu hệ thống</h2>
+                    <p class="text-sm text-slate-500" th:if="${currentUser != null}" th:text="${currentUser.department != null ? currentUser.department.name : 'Chưa cập nhật'}">Phòng ban</p>
+                </div>
+                <div class="flex gap-3 items-center">
+                    <form action="/documents" method="get" class="flex gap-2">
                         <input type="hidden" name="size" th:value="${pageSize}">
-                        <input type="text" name="keyword" th:value="${keyword}" placeholder="Tìm kiếm tài liệu..." class="search-input" style="padding: 8px 14px; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; width: 280px; font-family: inherit;">
-                        <button type="submit" class="btn-search" style="padding: 8px 14px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; cursor: pointer; transition: all 0.2s;">🔍</button>
+                        <input type="text" name="keyword" th:value="${keyword}" placeholder="Tìm kiếm tài liệu..." 
+                               class="px-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-64 text-sm">
+                        <button type="submit" class="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">🔍</button>
                     </form>
                     <a th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or currentUser.role.code == 'MANAGER')}" 
-                       href="/documents/upload" class="btn-upload" style="background: #2563eb; color: white; padding: 10px 20px; border-radius: 10px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                       href="/documents/upload" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         Tải Lên
                     </a>
                 </div>
             </div>
 
             <!-- Thông báo -->
-            <div th:if="${success}" class="alert alert-success" style="background:#dcfce7; color:#166534; padding:16px; border-radius:12px; margin-bottom:24px;" th:text="${success}"></div>
-            <div th:if="${error}" class="alert alert-error" style="background:#fee2e2; color:#991b1b; padding:16px; border-radius:12px; margin-bottom:24px;" th:text="${error}"></div>
+            <div th:if="${success}" class="mb-6 p-4 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl flex items-center gap-3 animate-in fade-in duration-300">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span th:text="${success}" class="font-medium text-sm"></span>
+            </div>
+            <div th:if="${error}" class="mb-6 p-4 bg-red-50 text-red-700 border border-red-100 rounded-xl flex items-center gap-3 animate-in fade-in duration-300">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span th:text="${error}" class="font-medium text-sm"></span>
+            </div>
 
             <!-- Legend phân quyền -->
-            <div class="access-legend" style="margin-bottom: 24px; font-size: 0.9rem; color: #64748b; background: #f8fafc; padding: 12px 20px; border-radius: 10px;">
-                <span class="badge PUBLIC" style="background:#eef2ff; color:#4338ca; padding:4px 10px; border-radius:6px; font-weight:600;">🌐 Công khai</span> Tất cả &nbsp;|&nbsp;
-                <span class="badge DEPARTMENT" style="background:#f0fdf4; color:#15803d; padding:4px 10px; border-radius:6px; font-weight:600;">🏢 Phòng ban</span> Theo phòng &nbsp;|&nbsp;
-                <span class="badge PROJECT" style="background:#fff7ed; color:#9a3412; padding:4px 10px; border-radius:6px; font-weight:600;">📂 Dự án</span> Theo dự án &nbsp;|&nbsp;
-                <span class="badge PRIVATE" style="background:#fef2f2; color:#b91c1c; padding:4px 10px; border-radius:6px; font-weight:600;">🔒 Riêng tư</span> Chỉ cá nhân
+            <div class="mb-6 flex flex-wrap gap-3 p-4 bg-white border border-slate-200 rounded-xl text-xs">
+                <span class="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg font-semibold">🌐 Công khai</span>
+                <span class="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg font-semibold">🏢 Phòng ban</span>
+                <span class="flex items-center gap-1.5 px-2.5 py-1.5 bg-orange-50 text-orange-700 rounded-lg font-semibold">📂 Dự án</span>
+                <span class="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 text-red-700 rounded-lg font-semibold">🔒 Riêng tư</span>
             </div>
 
             <!-- Table -->
-            <div class="docs-table-wrapper" style="background: #fff; border-radius: 16px; border: 1px solid #f1f5f9; overflow: hidden;">
-                <table class="docs-table" th:if="${!documents.isEmpty()}">
+            <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table class="w-full text-left text-sm" th:if="${!documents.isEmpty()}">
                     <thead>
-                        <tr style="background: #f8fafc;">
-                            <th>Tên Tài Liệu</th>
-                            <th>Phòng/Dự án</th>
-                            <th>Quyền</th>
-                            <th>Hành Động</th>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-6 py-4 font-semibold text-slate-700">Tên Tài Liệu</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700">Phòng/Dự án</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700">Quyền</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-right">Hành Động</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr th:each="doc : ${documents}">
-                            <td>
-                                <a th:href="@{/documents/{id}(id=${doc.id})}" class="doc-title" th:text="${doc.title}" style="font-weight: 600; color: #1e293b; text-decoration: none;">Tên tài liệu</a>
-                                <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;" th:text="${doc.fileType != null ? doc.fileType : 'Unknown'}">PDF</div>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr th:each="doc : ${documents}" class="hover:bg-slate-50/50 transition-colors group">
+                            <td class="px-6 py-4">
+                                <a th:href="@{/documents/{id}(id=${doc.id})}" class="font-bold text-slate-900 hover:text-indigo-600 transition-colors block" th:text="${doc.title}">Tên tài liệu</a>
+                                <div class="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider font-semibold" th:text="${doc.fileType != null ? doc.fileType : 'Unknown'}">PDF</div>
                             </td>
-                            <td>
-                                <div th:if="${!doc.departments.isEmpty()}">
-                                    <span th:each="dept : ${doc.departments}" class="dept-tag" th:text="${dept.name}" style="background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-right: 4px;">IT</span>
+                            <td class="px-6 py-4">
+                                <div class="flex flex-wrap gap-1.5">
+                                    <!-- Only show departments if access level is DEPARTMENT -->
+                                    <th:block th:if="${doc.accessLevel.name() == 'DEPARTMENT'}">
+                                        <span th:each="dept : ${doc.departments}" class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-medium border border-emerald-100" th:text="${dept.name}">IT</span>
+                                    </th:block>
+                                    
+                                    <!-- Only show projects if access level is PROJECT -->
+                                    <th:block th:if="${doc.accessLevel.name() == 'PROJECT'}">
+                                        <span th:each="proj : ${doc.projects}" class="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-md text-[11px] font-medium border border-orange-100" th:text="${proj.name}">Dự án A</span>
+                                    </th:block>
+
+                                    <!-- Show nothing or uploader info for others if preferred, but for now just empty -->
+                                    <span th:if="${(doc.accessLevel.name() == 'DEPARTMENT' and doc.departments.isEmpty()) or (doc.accessLevel.name() == 'PROJECT' and doc.projects.isEmpty()) or (doc.accessLevel.name() == 'PUBLIC') or (doc.accessLevel.name() == 'PRIVATE')}" class="text-slate-300">—</span>
                                 </div>
-                                <div th:if="${!doc.projects.isEmpty()}" style="margin-top:4px;">
-                                    <span th:each="proj : ${doc.projects}" class="proj-tag" th:text="${proj.name}" 
-                                          style="font-size:0.75rem; background:#eff6ff; padding:2px 8px; border-radius:4px; color:#1d4ed8; margin-right:4px;">Dự án A</span>
-                                </div>
-                                <span th:if="${doc.departments.isEmpty() and doc.projects.isEmpty()}" class="text-muted small">—</span>
                             </td>
-                            <td>
-                                <span th:class="'badge ' + ${doc.accessLevel.name()}"
+                            <td class="px-6 py-4">
+                                <span th:class="'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ' + 
+                                              (${doc.accessLevel.name() == 'PUBLIC'} ? 'bg-indigo-100 text-indigo-700' : 
+                                              (${doc.accessLevel.name() == 'PRIVATE'} ? 'bg-red-100 text-red-700' : 
+                                              (${doc.accessLevel.name() == 'PROJECT'} ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700')))"
                                       th:text="${doc.accessLevel == T(com.aiagent.model.AccessLevel).PUBLIC ? '🌐 Công khai' : 
                                                 (doc.accessLevel == T(com.aiagent.model.AccessLevel).PRIVATE ? '🔒 Riêng tư' : 
-                                                (doc.accessLevel == T(com.aiagent.model.AccessLevel).PROJECT ? '📂 Dự án' : '🏢 Phòng ban'))}"
-                                      style="font-size: 0.75rem; font-weight: 600;">
+                                                (doc.accessLevel == T(com.aiagent.model.AccessLevel).PROJECT ? '📂 Dự án' : '🏢 Phòng ban'))}">
                                 </span>
                             </td>
-                            <td class="actions">
-                                <a th:href="@{/documents/{id}(id=${doc.id})}" class="btn-view" title="Xem" style="text-decoration: none; margin-right: 8px;">👁</a>
-                                <a th:if="${doc.filePath != null}" 
-                                   th:href="@{/documents/{id}/download(id=${doc.id})}"
-                                   class="btn-download" title="Tải xuống" style="text-decoration: none; margin-right: 8px;">⬇</a>
-                                <form th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or doc.uploadedBy != null and doc.uploadedBy.id == currentUser.id)}" 
-                                      th:action="@{/documents/{id}/delete(id=${doc.id})}" method="post" style="display:inline;" onsubmit="return confirm('Bạn có chắc chắn muốn xoá tài liệu này?');">
-                                    <button type="submit" class="btn-delete" title="Xoá" style="background: none; border: none; cursor: pointer; color: #dc2626;">🗑️</button>
-                                </form>
+                            <td class="px-6 py-4 text-right">
+                                <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <a th:href="@{/documents/{id}(id=${doc.id})}" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Xem">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    </a>
+                                    <a th:if="${doc.filePath != null}" 
+                                       th:href="@{/documents/{id}/download(id=${doc.id})}"
+                                       class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Tải xuống">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    </a>
+                                    <form th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or doc.uploadedBy != null and doc.uploadedBy.id == currentUser.id)}" 
+                                          th:action="@{/documents/{id}/delete(id=${doc.id})}" method="post" class="inline" onsubmit="return confirm('Bạn có chắc chắn muốn xoá tài liệu này?');">
+                                        <button type="submit" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Xoá">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
                 </table>
 
                 <!-- Empty state -->
-                <div class="empty-state" th:if="${documents.isEmpty()}" style="text-align: center; padding: 60px 20px;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
-                    <h3 style="margin-bottom: 8px;">Chưa có tài liệu nào</h3>
-                    <p style="color: #64748b; margin-bottom: 24px;">Hãy tải lên tài liệu đầu tiên của bạn</p>
+                <div class="py-20 text-center" th:if="${documents.isEmpty()}">
+                    <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">📂</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">Chưa có tài liệu nào</h3>
+                    <p class="text-slate-500 mb-8 max-w-xs mx-auto">Hãy bắt đầu bằng cách tải lên tài liệu đầu tiên của bạn vào hệ thống.</p>
                     <a th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or currentUser.role.code == 'MANAGER')}" 
-                       href="/documents/upload" class="btn-upload" style="background: #2563eb; color: white; padding: 10px 24px; border-radius: 10px; text-decoration: none; font-weight: 600;">Tải Lên Ngay</a>
+                       href="/documents/upload" class="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/25">Tải Lên Ngay</a>
                 </div>
             </div>
             
-            <!-- Phân trang simplified -->
-            <div class="pagination" th:if="${documentPage != null and documentPage.totalPages > 1}" style="display: flex; justify-content: center; gap: 8px; margin-top: 24px;">
+            <!-- Phân trang -->
+            <div class="flex justify-center gap-2 mt-8" th:if="${documentPage != null and documentPage.totalPages > 1}">
                  <a th:each="i : ${#numbers.sequence(0, documentPage.totalPages - 1)}"
                     th:href="@{/documents(page=${i}, size=${pageSize}, keyword=${keyword})}" 
                     th:text="${i + 1}" 
-                    th:classappend="${i == documentPage.number} ? 'active' : ''"
-                    style="padding: 8px 16px; border: 1px solid #e2e8f0; border-radius: 8px; text-decoration: none; color: #475569;"></a>
+                    th:classappend="${i == documentPage.number} ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
+                    class="w-10 h-10 flex items-center justify-center rounded-xl font-semibold transition-all"></a>
             </div>
         </div>
     </main>
 </div>
-</body>
-</html>
-h3>
-                <p>Hãy tải lên tài liệu đầu tiên của bạn</p>
-                <a href="/documents/upload" class="btn-upload">Tải Lên Ngay</a>
-            </div>
-        </div>
-    </main>
-</div>
-
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const activeItem = document.querySelector('.page-item.active');
-        const activeBg = document.querySelector('.active-bg');
-        
-        if (activeItem && activeBg) {
-            // Position SVG on load underneath active page link
-            activeBg.style.width = activeItem.offsetWidth + "px";
-            activeBg.style.transform = `translateX(${activeItem.offsetLeft}px)`;
-        }
-
-        // Animated transiton upon click before reloading new thymeleaf page
-        document.querySelectorAll('.page-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                // To display full slide animation we briefly intercept navigation
-                e.preventDefault(); 
-                const href = item.getAttribute('href');
-                
-                if (activeItem) activeItem.classList.remove('active');
-                item.classList.add('active');
-                
-                activeBg.style.width = item.offsetWidth + "px";
-                activeBg.style.transform = `translateX(${item.offsetLeft}px)`;
-                
-                // Allow animation to glide securely before requesting the mapped URL
-                setTimeout(() => {
-                    window.location.href = href;
-                }, 300);
-            });
-        });
-    });
-</script>
 </body>
 </html>

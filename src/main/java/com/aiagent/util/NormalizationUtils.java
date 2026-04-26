@@ -16,15 +16,11 @@ public class NormalizationUtils {
             return "";
         }
 
-        // 1. Tách dấu (NFD)
-        String temp = Normalizer.normalize(input, Normalizer.Form.NFD);
+        // 1. NFC Normalization (Required for end-to-end consistency)
+        String normalized = Normalizer.normalize(input, Normalizer.Form.NFC);
         
-        // 2. Bỏ dấu bằng Regex (loại bỏ các Non-spacing Mark)
-        String removedAccents = temp.replaceAll("\\p{M}", "");
-        
-        // 3. Lowercase, Trim, và rút gọn khoảng trắng
-        return removedAccents
-                .toLowerCase()
+        // 2. Collapse whitespace and trim
+        return normalized
                 .replaceAll("\\s+", " ")
                 .trim();
     }

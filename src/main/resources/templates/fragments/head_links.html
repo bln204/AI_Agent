@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head_links">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/documents.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: '#6366f1',
+                            dark: '#4f46e5',
+                        },
+                        sidebar: {
+                            bg: '#0f172a',
+                            hover: 'rgba(255,255,255,0.07)',
+                            active: 'rgba(99,102,241,0.2)',
+                            text: '#cbd5e1',
+                            muted: '#64748b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+</body>
+</html>

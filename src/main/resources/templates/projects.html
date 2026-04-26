@@ -4,217 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản Lý Dự Án - AI Agent</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" th:href="@{/css/documents.css}">
-    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
-    <style>
-        .projects-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 24px;
-            margin-top: 24px;
-        }
-        .project-card {
-            background: #fff;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
-            border: 1px solid #f1f5f9;
-            display: flex;
-            flex-direction: column;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .project-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-        }
-        .project-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
-        }
-        .project-title {
-            font-size: 1.125rem;
-            font-weight: 700;
-            color: #1e293b;
-            line-height: 1.4;
-        }
-        .project-status {
-            font-size: 0.75rem;
-            padding: 4px 10px;
-            border-radius: 9999px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.025em;
-        }
-        .status-active { background: #dcfce7; color: #166534; }
-        .status-inactive { background: #fee2e2; color: #991b1b; }
-        .project-desc {
-            font-size: 0.9375rem;
-            color: #64748b;
-            margin-bottom: 24px;
-            line-height: 1.6;
-            flex-grow: 1;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        .project-actions {
-            display: flex;
-            gap: 10px;
-            padding-top: 16px;
-            border-top: 1px solid #f1f5f9;
-        }
-        .btn-action {
-            padding: 8px 14px;
-            border-radius: 8px;
-            font-size: 0.875rem;
-            font-weight: 500;
-            text-decoration: none;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #fff;
-            color: #475569;
-        }
-        .btn-action:hover {
-            background: #f8fafc;
-            border-color: #cbd5e1;
-        }
-        .btn-delete { color: #dc2626; border-color: #fca5a5; }
-        .btn-delete:hover { background: #fef2f2; border-color: #ef4444; }
-        
-        .btn-create-main {
-            background: #2563eb;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
-            transition: all 0.2s;
-        }
-        .btn-create-main:hover {
-            background: #1d4ed8;
-            transform: translateY(-1px);
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
-        }
-        
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .modal-content {
-            background: white;
-            padding: 32px;
-            border-radius: 20px;
-            width: 100%;
-            max-width: 500px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            animation: modalScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        @keyframes modalScale {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; font-size: 0.875rem; font-weight: 600; color: #334155; margin-bottom: 6px; }
-        .form-control { 
-            width: 100%; 
-            padding: 10px 14px; 
-            border: 1px solid #e2e8f0; 
-            border-radius: 8px; 
-            outline: none; 
-            font-family: inherit;
-            transition: border-color 0.2s;
-        }
-        .form-control:focus { border-color: #2563eb; }
-        
-        .empty-state {
-            text-align: center;
-            padding: 80px 40px;
-            background: #fff;
-            border-radius: 20px;
-            border: 2px dashed #e2e8f0;
-            margin-top: 24px;
-        }
-        .empty-icon { font-size: 48px; margin-bottom: 16px; display: block; }
-        .empty-title { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
-        .empty-desc { color: #64748b; max-width: 300px; margin: 0 auto 24px; }
-    </style>
+    <div th:replace="~{fragments/head_links :: head_links}"></div>
 </head>
-<body>
-<div class="docs-page">
+<body class="bg-slate-50">
+<div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
     <div th:replace="~{fragments/sidebar :: sidebar('projects')}"></div>
 
-    <main class="docs-main">
+    <main class="flex-1 flex flex-col overflow-hidden">
         <!-- Header -->
         <div th:replace="~{fragments/header :: header('📁 Quản Lý Dự Án', 'Quản lý các nhóm làm việc và quyền truy cập tài liệu')}"></div>
 
-        <div class="docs-content" style="padding: 24px 0;">
+        <div class="flex-1 overflow-y-auto p-6">
             <!-- Notifications -->
-            <div th:if="${success}" class="alert alert-success" style="background:#dcfce7; color:#166534; padding:16px; border-radius:12px; margin-bottom:24px; border:1px solid #bbf7d0; font-weight:500;" th:text="${success}"></div>
-            <div th:if="${error}" class="alert alert-error" style="background:#fee2e2; color:#991b1b; padding:16px; border-radius:12px; margin-bottom:24px; border:1px solid #fecaca; font-weight:500;" th:text="${error}"></div>
+            <div th:if="${success}" class="mb-6 p-4 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl flex items-center gap-3" th:text="${success}"></div>
+            <div th:if="${error}" class="mb-6 p-4 bg-red-50 text-red-700 border border-red-100 rounded-xl flex items-center gap-3" th:text="${error}"></div>
 
             <!-- Top Actions -->
-            <div class="page-top-actions" th:if="${canManage}" style="display: flex; justify-content: flex-end;">
-                <button class="btn-create-main" onclick="openModal('createModal')">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Danh sách dự án</h2>
+                    <p class="text-sm text-slate-500">Các dự án đang hoạt động trong hệ thống</p>
+                </div>
+                <button th:if="${canManage}" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20" onclick="openModal('createModal')">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Tạo dự án mới
                 </button>
             </div>
 
             <!-- Projects Grid -->
-            <div class="projects-grid" th:if="${!projects.isEmpty()}">
-                <div th:each="proj : ${projects}" class="project-card">
-                    <div class="project-header">
-                        <span class="project-title" th:text="${proj.name}">Tên dự án</span>
-                        <span th:class="|project-status ${proj.active ? 'status-active' : 'status-inactive'}|" 
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" th:if="${!projects.isEmpty()}">
+                <div th:each="proj : ${projects}" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all group">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors" th:text="${proj.name}">Tên dự án</h3>
+                        <span th:class="|px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${proj.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}|" 
                               th:text="${proj.active ? 'Đang chạy' : 'Tạm dừng'}"></span>
                     </div>
-                    <p class="project-desc" th:text="${proj.description ?: 'Chưa có mô tả chi tiết cho dự án này.'}"></p>
+                    <p class="text-slate-500 text-sm leading-relaxed mb-6 h-15 line-clamp-3" th:text="${proj.description ?: 'Chưa có mô tả chi tiết cho dự án này.'}"></p>
                     
-                    <div class="project-actions">
-                        <!-- All users who can access can see members -->
-                        <a th:href="@{/projects/{id}/members(id=${proj.id})}" class="btn-action">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <div class="pt-4 border-t border-slate-100 flex gap-2">
+                        <a th:href="@{/projects/{id}/members(id=${proj.id})}" class="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold transition-colors border border-slate-200">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                             Thành viên
                         </a>
 
-                        <!-- Management actions for DIRECTOR only -->
                         <th:block th:if="${canManage}">
-                            <button class="btn-action btn-edit-project"
+                            <button class="btn-edit-project p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                                     th:data-id="${proj.id}"
                                     th:data-name="${proj.name}"
                                     th:data-desc="${proj.description}"
-                                    th:data-active="${proj.active}">
+                                    th:data-active="${proj.active}"
+                                    title="Chỉnh sửa">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                Sửa
                             </button>
-                            <form th:action="@{/projects/{id}/delete(id=${proj.id})}" method="post" onsubmit="return confirm('Bạn có chắc chắn muốn xoá dự án này? Tài liệu liên quan có thể bị ảnh hưởng.')" style="margin:0;">
-                                <button type="submit" class="btn-action btn-delete">
+                            <form th:action="@{/projects/delete/{id}(id=${proj.id})}" method="post" 
+                                  onsubmit="if(confirm('Bạn có chắc chắn muốn xoá dự án này?')) { this.querySelector('button').disabled = true; return true; } return false;" class="m-0">
+                                <button type="submit" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Xoá">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                                    Xoá
                                 </button>
                             </form>
                         </th:block>
@@ -223,11 +69,11 @@
             </div>
 
             <!-- Empty State -->
-            <div class="empty-state" th:if="${projects.isEmpty()}">
-                <span class="empty-icon">📁</span>
-                <h3 class="empty-title">Không tìm thấy dự án</h3>
-                <p class="empty-desc">Hiện tại chưa có dự án nào được tạo trong hệ thống.</p>
-                <button th:if="${canManage}" class="btn-create-main" onclick="openModal('createModal')" style="margin: 0 auto;">
+            <div class="py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200" th:if="${projects.isEmpty()}">
+                <span class="text-6xl mb-6 block">📁</span>
+                <h3 class="text-xl font-bold text-slate-800 mb-2">Không tìm thấy dự án</h3>
+                <p class="text-slate-500 mb-8 max-w-xs mx-auto">Hiện tại chưa có dự án nào được tạo trong hệ thống.</p>
+                <button th:if="${canManage}" class="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/25" onclick="openModal('createModal')">
                     Bắt đầu dự án đầu tiên
                 </button>
             </div>
@@ -236,52 +82,60 @@
 </div>
 
 <!-- Modal Create -->
-<div id="createModal" class="modal">
-    <div class="modal-content">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
-            <h2 style="margin:0; font-size:1.5rem;">Tạo dự án mới</h2>
-            <button onclick="closeModal('createModal')" style="background:none; border:none; cursor:pointer; color:#94a3b8;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+<div id="createModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-slate-900">Tạo dự án mới</h2>
+            <button onclick="closeModal('createModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
-        <form th:action="@{/projects/create}" method="post">
-            <div class="form-group">
-                <label>Tên dự án</label>
-                <input type="text" name="name" class="form-control" placeholder="Nhập tên dự án..." required>
+        <form th:action="@{/projects/create}" method="post" class="p-6">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Tên dự án</label>
+                    <input type="text" name="name" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" placeholder="Nhập tên dự án..." required>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Mô tả</label>
+                    <textarea name="description" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" rows="4" placeholder="Nhập mô tả chi tiết..."></textarea>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Mô tả</label>
-                <textarea name="description" class="form-control" rows="4" placeholder="Nhập mô tả chi tiết..."></textarea>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:32px;">
-                <button type="button" onclick="closeModal('createModal')" class="btn-action">Hủy</button>
-                <button type="submit" class="btn-create-main">Lưu dự án</button>
+            <div class="mt-8 flex justify-end gap-3">
+                <button type="button" onclick="closeModal('createModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Lưu dự án</button>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Modal Edit -->
-<div id="editModal" class="modal">
-    <div class="modal-content">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
-            <h2 style="margin:0; font-size:1.5rem;">Chỉnh sửa dự án</h2>
-            <button onclick="closeModal('editModal')" style="background:none; border:none; cursor:pointer; color:#94a3b8;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+<div id="editModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-slate-900">Chỉnh sửa dự án</h2>
+            <button onclick="closeModal('editModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
-        <form id="editForm" method="post">
-            <div class="form-group">
-                <label>Tên dự án</label>
-                <input type="text" name="name" id="editName" class="form-control" required>
+        <form id="editForm" method="post" class="p-6">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Tên dự án</label>
+                    <input type="text" name="name" id="editName" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Mô tả</label>
+                    <textarea name="description" id="editDesc" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" rows="4"></textarea>
+                </div>
+                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <input type="checkbox" name="active" id="editActive" value="true" class="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500">
+                    <label for="editActive" class="text-sm font-bold text-slate-700 cursor-pointer">Đang hoạt động</label>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Mô tả</label>
-                <textarea name="description" id="editDesc" class="form-control" rows="4"></textarea>
-            </div>
-            <div class="form-group" style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="active" id="editActive" value="true">
-                <label for="editActive" style="margin:0;">Đang hoạt động</label>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:32px;">
-                <button type="button" onclick="closeModal('editModal')" class="btn-action">Hủy</button>
-                <button type="submit" class="btn-create-main">Cập nhật</button>
+            <div class="mt-8 flex justify-end gap-3">
+                <button type="button" onclick="closeModal('editModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Cập nhật</button>
             </div>
         </form>
     </div>
@@ -289,14 +143,16 @@
 
 <script>
     function openModal(id) {
-        document.getElementById(id).style.display = 'flex';
+        const modal = document.getElementById(id);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
     function closeModal(id) {
-        document.getElementById(id).style.display = 'none';
+        const modal = document.getElementById(id);
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
     }
 
-    // Use data attributes instead of inline th:onclick string interpolation
-    // to prevent JS injection/crash when project name/description contains quotes
     document.querySelectorAll('.btn-edit-project').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var id = this.dataset.id;
@@ -311,10 +167,9 @@
         });
     });
 
-    // Close on outside click
     window.onclick = function(event) {
-        if (event.target.classList.contains('modal')) {
-            event.target.style.display = 'none';
+        if (event.target.id && event.target.id.includes('Modal')) {
+            closeModal(event.target.id);
         }
     }
 </script>

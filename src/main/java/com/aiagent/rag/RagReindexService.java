@@ -46,6 +46,14 @@ public class RagReindexService {
                     continue;
                 }
 
+                // Noise/Test Document Filter for Re-indexing
+                String title = doc.getTitle().toLowerCase();
+                if (title.contains("test") || title.contains("demo") || title.contains("sample")) {
+                    log.info("[RAG-REINDEX] Skipping test/demo document: {}", doc.getTitle());
+                    skipCount++;
+                    continue;
+                }
+
                 java.io.File file = new java.io.File(doc.getFilePath());
                 if (!file.exists()) {
                     log.warn("[RAG-REINDEX] Skipping doc ID {}: File not found at path: {}", doc.getId(), doc.getFilePath());
@@ -65,17 +73,36 @@ public class RagReindexService {
                         .collect(Collectors.toList());
                 
                 Long uploaderId = (doc.getUploadedBy() != null) ? doc.getUploadedBy().getId() : null;
+                String userName = (doc.getUploadedBy() != null) ? doc.getUploadedBy().getUsername() : "UNKNOWN";
+                String departmentNames = doc.getDepartments().stream()
+                        .map(com.aiagent.model.Department::getName)
+                        .collect(Collectors.joining(", "));
+                if (departmentNames.isEmpty() && doc.getUploadedBy() != null && doc.getUploadedBy().getDepartment() != null) {
+                    departmentNames = doc.getUploadedBy().getDepartment().getName();
+                }
+                
                 String accessLevel = (doc.getAccessLevel() != null) ? doc.getAccessLevel().name() : "PUBLIC";
 
                 documentIngestionService.ingestDocumentSync(
                         doc.getFilePath(), 
                         doc.getId(), 
+                        doc.getDocumentUuid(),
                         doc.getTitle(), 
                         doc.getFileType(),
                         uploaderId, 
+                        userName,
+                        doc.getUploaderRole(),
+                        departmentNames,
+                        doc.getDecisionNumber(),
+                        doc.getClassification() != null ? doc.getClassification().name() : "OTHER",
+                        doc.getProjectName(),
+                        doc.getDescription(),
+                        doc.isInternalSourceFlag(),
                         accessLevel,
                         deptIds, 
-                        projIds
+                        projIds,
+                        doc.getCreatedAt(),
+                        doc.getVersion()
                 );
                 
                 successCount++;

@@ -36,7 +36,7 @@ public class DocumentController {
     private final DepartmentRepository departmentRepository;
     private final com.aiagent.repository.ProjectMemberRepository projectMemberRepository;
     private final com.aiagent.repository.ProjectRepository projectRepository;
-    private final com.aiagent.service.AccessPolicyService accessPolicyService;
+    private final com.aiagent.service.DocumentAccessService documentAccessService;
 
     @GetMapping("/documents")
     public String listDocuments(
@@ -66,7 +66,7 @@ public class DocumentController {
         User user = resolveUser(authentication);
         if (user == null) return "redirect:/login";
         
-        if (!accessPolicyService.canUpload(user)) {
+        if (!documentAccessService.canUpload(user)) {
             redirectAttributes.addFlashAttribute("error", "Bạn không có quyền truy cập trang tải lên tài liệu.");
             return "redirect:/documents";
         }
@@ -96,18 +96,23 @@ public class DocumentController {
                                @RequestParam(value = "departmentIds", required = false) List<Long> departmentIds,
                                @RequestParam(value = "projectIds", required = false) List<Long> projectIds,
                                @RequestParam("accessLevel") com.aiagent.model.AccessLevel accessLevel,
+                               @RequestParam(value = "decision", required = false) String decision,
+                               @RequestParam(value = "classification", defaultValue = "OTHER") com.aiagent.model.DocumentClassification classification,
+                               @RequestParam(value = "projectName", required = false) String projectName,
+                               @RequestParam(value = "description", required = false) String description,
+                               @RequestParam(value = "internalSource", defaultValue = "true") boolean internalSource,
                                @RequestParam(value = "file", required = false) MultipartFile file,
                                RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
         if (user == null) return "redirect:/login";
         
-        if (!accessPolicyService.canUpload(user)) {
+        if (!documentAccessService.canUpload(user)) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: Bạn không có quyền tải lên tài liệu.");
             return "redirect:/documents";
         }
 
         try {
-            documentService.uploadDocument(title, content, departmentIds, projectIds, accessLevel, file, user);
+            documentService.uploadDocument(title, content, departmentIds, projectIds, accessLevel, decision, classification, projectName, description, internalSource, file, user);
             redirectAttributes.addFlashAttribute("success", "Tải tài liệu lên thành công!");
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
@@ -124,9 +129,9 @@ public class DocumentController {
              return "redirect:/login";
         }
 
-        // Delegate access check to a service would be better, but keeping controller logic for now
-        // Note: we updated DocumentService.canAccess to return true for now, 
-        // we should ideally use AccessPolicyService here too.
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return "redirect:/documents";
+        }
         
         model.addAttribute("document", doc);
         model.addAttribute("currentUser", user);

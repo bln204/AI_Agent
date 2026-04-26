@@ -43,7 +43,6 @@ public class User {
           @JoinColumn(name = "department_id")
           private Department department;
 
-          // Temporary fields for migration
           @Column(name = "department", length = 100)
           private String oldDepartment;
 

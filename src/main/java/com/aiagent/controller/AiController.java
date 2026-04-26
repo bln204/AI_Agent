@@ -20,7 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
-@RequestMapping("/ai")
+@RequestMapping(value = "/ai", produces = "application/json;charset=UTF-8")
 @RequiredArgsConstructor
 @Slf4j
 public class AiController {
@@ -41,6 +41,11 @@ public class AiController {
                     java.util.Collections.emptyList(), 
                     java.util.Collections.emptyList(), 
                     com.aiagent.model.AccessLevel.PRIVATE, 
+                    null,
+                    com.aiagent.model.DocumentClassification.OTHER,
+                    null,
+                    "Uploaded via AI Chat",
+                    true,
                     file, 
                     user);
             

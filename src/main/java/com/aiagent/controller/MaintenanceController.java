@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/maintenance")
+@RequestMapping(value = "/api/maintenance", produces = "application/json;charset=UTF-8")
 @RequiredArgsConstructor
 @Slf4j
 public class MaintenanceController {
@@ -42,15 +42,34 @@ public class MaintenanceController {
                 List<Long> deptIds = doc.getDepartments().stream().map(d -> d.getId()).collect(Collectors.toList());
                 List<Long> projIds = doc.getProjects().stream().map(p -> p.getId()).collect(Collectors.toList());
                 
+                String userName = (doc.getUploadedBy() != null) ? doc.getUploadedBy().getUsername() : "UNKNOWN";
+                String departmentNames = doc.getDepartments().stream()
+                        .map(com.aiagent.model.Department::getName)
+                        .collect(Collectors.joining(", "));
+                if (departmentNames.isEmpty() && doc.getUploadedBy() != null && doc.getUploadedBy().getDepartment() != null) {
+                    departmentNames = doc.getUploadedBy().getDepartment().getName();
+                }
+
                 ingestionService.ingestDocument(
                     doc.getFilePath(),
                     doc.getId(),
+                    doc.getDocumentUuid(),
                     doc.getTitle(),
                     doc.getFileType(),
                     doc.getUploadedBy().getId(),
+                    userName,
+                    doc.getUploaderRole(),
+                    departmentNames,
+                    doc.getDecisionNumber(),
+                    doc.getClassification() != null ? doc.getClassification().name() : "OTHER",
+                    doc.getProjectName(),
+                    doc.getDescription(),
+                    doc.isInternalSourceFlag(),
                     doc.getAccessLevel().name(),
                     deptIds,
-                    projIds
+                    projIds,
+                    doc.getCreatedAt(),
+                    doc.getVersion()
                 );
                 count++;
             } catch (Exception e) {

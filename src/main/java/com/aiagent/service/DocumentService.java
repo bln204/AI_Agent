@@ -30,7 +30,7 @@ public class DocumentService {
     private final DocumentIngestionService documentIngestionService;
     private final DepartmentRepository departmentRepository;
     private final ProjectRepository projectRepository;
-    private final AccessPolicyService accessPolicyService;
+    private final DocumentAccessService documentAccessService;
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
@@ -49,7 +49,7 @@ public class DocumentService {
 
         String roleCode = user.getRole() != null ? user.getRole().getCode() : RoleConstants.ROLE_GUEST;
         Long userId = user.getId();
-        Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : -1L;
+        Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
 
         log.debug("[DOC-ACCESS] userId={}, roleCode={}, deptId={}, keyword={}", userId, roleCode, deptId, normalizedKeyword);
 
@@ -68,16 +68,20 @@ public class DocumentService {
         return result;
     }
 
+    private final com.aiagent.service.DecisionNumberService decisionNumberService;
+
     @Transactional
     public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds, 
                                  java.util.List<Long> projectIds, AccessLevel accessLevel, 
+                                 String decision, com.aiagent.model.DocumentClassification classification,
+                                 String projectName, String description, boolean internalSourceFlag,
                                  MultipartFile file, User uploader) throws java.io.IOException {
 
         if (uploader == null || uploader.getRole() == null) {
             throw new SecurityException("Không có quyền tải lên tài liệu.");
         }
 
-        if (!accessPolicyService.canUpload(uploader)) {
+        if (!documentAccessService.canUpload(uploader)) {
             throw new SecurityException("Bạn không có quyền tải lên tài liệu.");
         }
 
@@ -94,22 +98,51 @@ public class DocumentService {
         doc.setContent(content != null ? content : "");
         doc.setAccessLevel(accessLevel != null ? accessLevel : AccessLevel.DEPARTMENT);
         doc.setUploadedBy(uploader);
-
-        // Security Guard: Manager restriction to own department (Constraint from established business rules)
-        if (RoleConstants.ROLE_MANAGER.equals(uploader.getRole().getCode()) && uploader.getDepartment() != null) {
-            log.info("[SECURITY-ENFORCE] Restricting MANAGER {} to upload only to department: {}", 
-                    uploader.getEmail(), uploader.getDepartment().getCode());
-            departmentIds = java.util.List.of(uploader.getDepartment().getId());
+        doc.setClassification(classification != null ? classification : com.aiagent.model.DocumentClassification.OTHER);
+        doc.setDescription(description);
+        doc.setInternalSourceFlag(internalSourceFlag);
+        doc.setProjectName(projectName);
+        
+        // Auto-generate decision number if applicable
+        if (com.aiagent.model.DocumentClassification.DECISION_DOCUMENT.equals(classification)) {
+            doc.setDecisionNumber(decisionNumberService.generateNextDecisionNumber());
+        } else {
+            doc.setDecisionNumber(decision);
         }
 
-        // Set departments metadata (even if not strictly used for access, e.g. in PUBLIC/PRIVATE)
-        if (departmentIds != null && !departmentIds.isEmpty()) {
-            doc.setDepartments(new java.util.HashSet<>(departmentRepository.findAllById(departmentIds)));
-        }
+        // Security Rule: Mutually exclusive associations based on AccessLevel
+        if (AccessLevel.DEPARTMENT.equals(accessLevel)) {
+            doc.setProjects(new java.util.HashSet<>());
+            doc.setProjectName(null);
+            
+            // Security Guard: Manager restriction to own department
+            if (RoleConstants.ROLE_MANAGER.equals(uploader.getRole().getCode()) && uploader.getDepartment() != null) {
+                log.info("[SECURITY-ENFORCE] Restricting MANAGER {} to upload only to department: {}", 
+                        uploader.getEmail(), uploader.getDepartment().getCode());
+                departmentIds = java.util.List.of(uploader.getDepartment().getId());
+            }
 
-        // Set projects metadata
-        if (projectIds != null && !projectIds.isEmpty()) {
-            doc.setProjects(new java.util.HashSet<>(projectRepository.findAllById(projectIds)));
+            if (departmentIds != null && !departmentIds.isEmpty()) {
+                doc.setDepartments(new java.util.HashSet<>(departmentRepository.findAllById(departmentIds)));
+                doc.setDepartmentName(departmentRepository.findById(departmentIds.get(0)).map(com.aiagent.model.Department::getName).orElse("UNKNOWN"));
+            }
+        } else if (AccessLevel.PROJECT.equals(accessLevel)) {
+            doc.setDepartments(new java.util.HashSet<>());
+            doc.setDepartmentName(null);
+            if (projectIds != null && !projectIds.isEmpty()) {
+                doc.setProjects(new java.util.HashSet<>(projectRepository.findAllById(projectIds)));
+                if (doc.getProjectName() == null || doc.getProjectName().isBlank()) {
+                    doc.setProjectName(projectRepository.findById(projectIds.get(0)).map(com.aiagent.model.Project::getName).orElse("N/A"));
+                }
+            }
+        } else if (AccessLevel.PRIVATE.equals(accessLevel)) {
+            doc.setDepartments(new java.util.HashSet<>());
+            doc.setProjects(new java.util.HashSet<>());
+            doc.setDepartmentName(null);
+            doc.setProjectName(null);
+        } else if (AccessLevel.PUBLIC.equals(accessLevel)) {
+            // Public can have associations for info, but usually empty is cleaner
+            // Let's keep them if provided, or clear if desired. User didn't specify.
         }
 
         Document savedDoc = documentRepository.save(doc);
@@ -121,31 +154,34 @@ public class DocumentService {
 
             documentRepository.save(savedDoc);
 
-            // CRITICAL FIX: Eagerly resolve all lazy-loaded associations BEFORE
-            // calling the @Async method. The Hibernate session will be closed
-            // by the time the async thread executes.
+            // CRITICAL FIX: Eagerly resolve all lazy-loaded associations
             java.util.List<Long> resolvedDeptIds = savedDoc.getDepartments().stream()
                     .map(com.aiagent.model.Department::getId)
                     .collect(java.util.stream.Collectors.toList());
             java.util.List<Long> resolvedProjIds = savedDoc.getProjects().stream()
                     .map(com.aiagent.model.Project::getId)
                     .collect(java.util.stream.Collectors.toList());
-            String resolvedAccessLevel = savedDoc.getAccessLevel() != null 
-                    ? savedDoc.getAccessLevel().name() : "PUBLIC";
-            String resolvedTitle = savedDoc.getTitle();
-            String resolvedFileType = savedDoc.getFileType();
-            Long resolvedDocId = savedDoc.getId();
+            
+            String uploaderName = uploader.getUsername();
+            String uploaderRole = uploader.getRole() != null ? uploader.getRole().getName() : "STAFF";
+            String departmentNames = savedDoc.getDepartmentName();
+            if (departmentNames == null || departmentNames.isEmpty()) {
+                departmentNames = uploader.getDepartment() != null ? uploader.getDepartment().getName() : "UNKNOWN";
+            }
 
             log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
-                    resolvedDocId, resolvedTitle, resolvedAccessLevel, resolvedDeptIds, resolvedProjIds);
+                    savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
 
             try {
                 documentIngestionService.ingestDocument(
-                        savedPath, resolvedDocId, resolvedTitle, resolvedFileType,
-                        uploader.getId(), resolvedAccessLevel,
-                        resolvedDeptIds, resolvedProjIds);
+                        savedPath, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
+                        uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
+                        savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(), 
+                        savedDoc.isInternalSourceFlag(),
+                        savedDoc.getAccessLevel().name(),
+                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
             } catch (Exception e) {
-                log.error("Ingestion vào Qdrant thất bại cho document {}: {}", resolvedDocId, e.getMessage());
+                log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
             }
         }
 
@@ -158,9 +194,7 @@ public class DocumentService {
     }
 
     public boolean canAccess(User user, Document doc) {
-        // Access logic is now centralized in AccessPolicyService
-        // This is a placeholder for backward compatibility in controllers
-        return true; 
+        return documentAccessService.canAccessDocument(user, doc);
     }
 
     private String saveFile(MultipartFile file) throws IOException {
@@ -197,8 +231,17 @@ public class DocumentService {
             throw new SecurityException("Bạn không có quyền xoá tài liệu này.");
         }
         
+        // 1. Remove from Vector Store (CRITICAL: Prevent Orphan Vectors)
+        try {
+            documentIngestionService.deleteFromVectorStore(id);
+        } catch (Exception e) {
+            log.error("Failed to remove document {} from vector store: {}", id, e.getMessage());
+        }
+
+        // 2. Remove from DB
         documentRepository.delete(doc);
         
+        // 3. Remove from Disk
         if (doc.getFilePath() != null) {
             try {
                 Files.deleteIfExists(Paths.get(doc.getFilePath()));

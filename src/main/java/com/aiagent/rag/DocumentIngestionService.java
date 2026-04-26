@@ -14,6 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import com.aiagent.repository.DocumentRepository;
 import org.springframework.scheduling.annotation.Async;
 
 @Service
@@ -23,6 +26,7 @@ public class DocumentIngestionService {
 
     private final VectorStore vectorStore;
     private final EmbeddingModel embeddingModel;
+    private final DocumentRepository documentRepository;
 
     /**
      * Ingest document vào Qdrant (Chạy ngầm để không làm block Web Request).
@@ -32,18 +36,22 @@ public class DocumentIngestionService {
      * are NOT accessible in a separate thread after the original session closes.
      */
     @Async
-    public void ingestDocument(String filePath, Long documentId, String title, String fileType,
-                                Long userId, String accessLevel,
-                                List<Long> departmentIds, List<Long> projectIds) {
-        ingestDocumentSync(filePath, documentId, title, fileType, userId, accessLevel, departmentIds, projectIds);
+    public void ingestDocument(String filePath, Long documentId, String documentUuid, String title, String fileType,
+                                 Long userId, String userName, String uploaderRole, String department, String decisionNumber,
+                                 String classification, String projectName, String description, boolean internalSourceFlag,
+                                 String accessLevel,
+                                 List<Long> departmentIds, List<Long> projectIds, java.time.LocalDateTime createdAt, Integer version) {
+        ingestDocumentSync(filePath, documentId, documentUuid, title, fileType, userId, userName, uploaderRole, department, decisionNumber, classification, projectName, description, internalSourceFlag, accessLevel, departmentIds, projectIds, createdAt, version);
     }
 
     /**
      * Synchronous version of ingestDocument for batch processing.
      */
-    public void ingestDocumentSync(String filePath, Long documentId, String title, String fileType,
-                                    Long userId, String accessLevel,
-                                    List<Long> departmentIds, List<Long> projectIds) {
+    public void ingestDocumentSync(String filePath, Long documentId, String documentUuid, String title, String fileType,
+                                    Long userId, String userName, String uploaderRole, String department, String decisionNumber,
+                                    String classification, String projectName, String description, boolean internalSourceFlag,
+                                    String accessLevel,
+                                    List<Long> departmentIds, List<Long> projectIds, java.time.LocalDateTime createdAt, Integer version) {
         if (filePath == null) {
             log.error("File path is missing for document ID: {}", documentId);
             return;
@@ -68,17 +76,39 @@ public class DocumentIngestionService {
             TikaDocumentReader reader = new TikaDocumentReader(resource);
             List<Document> documents = reader.read();
 
-            if (documents.isEmpty() || documents.get(0).getContent().trim().isEmpty()) {
-                log.warn("❌ CẢNH BÁO: File PDF/Doc không có TEXT (có thể là file scan hoặc rỗng): {}", actualFile.getName());
+            if (documents.isEmpty() || documents.get(0).getContent() == null || documents.get(0).getContent().trim().isEmpty()) {
+                log.warn("❌ CẢNH BÁO: File PDF/Doc không có TEXT (có thể là file scan hoặc rỗng) cho Doc ID: {}. SKIP INDEXING.", documentId);
                 return;
             }
-            log.info("=> Tika Extract thành công! Chiều dài tổng cộng: ~{} ký tự", documents.get(0).getContent().length());
+            
+            // Normalize content to NFC form to fix encoding issues
+            String rawContent = documents.get(0).getContent();
+            String normalizedContent = com.aiagent.util.NormalizationUtils.normalize(rawContent);
+            log.info("=> Tika Extract thành công! Chiều dài: ~{} ký tự (sau chuẩn hóa NFC)", normalizedContent.length());
+            log.debug("=> Preview (first 200 chars): {}", 
+                normalizedContent.length() > 200 ? normalizedContent.substring(0, 200) : normalizedContent);
+
+            // [STRICT FIX] Ensure extracted text is stored in the database entity
+            try {
+                com.aiagent.model.Document dbDoc = documentRepository.findById(documentId).orElse(null);
+                if (dbDoc != null) {
+                    dbDoc.setContent(normalizedContent);
+                    documentRepository.saveAndFlush(dbDoc);
+                    log.info("✅ SUCCESS: Đã cập nhật nội dung văn bản vào Database cho Doc ID: {}", documentId);
+                }
+            } catch (Exception e) {
+                log.error("⚠️ WARNING: Không thể cập nhật nội dung vào DB cho Doc ID: {}. Error: {}", documentId, e.getMessage());
+            }
+
+            // Update documents list with normalized content
+            org.springframework.ai.document.Document normalizedDoc = 
+                new org.springframework.ai.document.Document(normalizedContent, documents.get(0).getMetadata());
+            List<org.springframework.ai.document.Document> documentsToSplit = List.of(normalizedDoc);
 
             // Chunking Strategy (Layer 7): Optimized for both Specific and Abstract queries
             log.info("[2/3] Thực hiện cắt Chunk bằng TokenTextSplitter (800 tokens, 100 overlap)...");
-            // 800 tokens is roughly ~3000 chars, good for capturing enough context for abstract questions
             TokenTextSplitter splitter = new TokenTextSplitter(800, 100, 5, 10000, true);
-            List<Document> splitDocuments = splitter.apply(documents);
+            List<org.springframework.ai.document.Document> splitDocuments = splitter.apply(documentsToSplit);
 
             log.info("=> File được cắt thành {} chunks.", splitDocuments.size());
 
@@ -88,8 +118,10 @@ public class DocumentIngestionService {
             final String resolvedFileType = (fileType != null) ? fileType.toLowerCase() : "unknown";
             final List<Long> resolvedDeptIds = (departmentIds != null) ? departmentIds : List.of();
             final List<Long> resolvedProjIds = (projectIds != null) ? projectIds : List.of();
+            
+            final String formattedDate = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(createdAt != null ? createdAt : java.time.LocalDateTime.now());
 
-            // 1. Fail-Safe Validation: Check accessLevel requirements before mapping chunks
+            // 1. Fail-Safe Validation
             if ("PROJECT".equalsIgnoreCase(resolvedAccessLevel) && resolvedProjIds.isEmpty()) {
                 log.error("[RAG-INGEST-ABORT] Doc ID {} is marked as PROJECT but has NO project IDs. Aborting ingestion for security.", documentId);
                 return;
@@ -103,18 +135,32 @@ public class DocumentIngestionService {
                 Map<String, Object> metadata = new HashMap<>(doc.getMetadata());
 
                 metadata.put("document_id", String.valueOf(documentId));
+                metadata.put("document_uuid", documentUuid != null ? documentUuid : "");
+                metadata.put("version", String.valueOf(version != null ? version : 1));
                 metadata.put("document_name", resolvedTitle);
                 metadata.put("access_level", resolvedAccessLevel);
-                metadata.put("uploader_id", String.valueOf(userId));
+                metadata.put("uploader_id", String.valueOf(userId)); // Standardized Key
+                metadata.put("uploader_role", uploaderRole != null ? uploaderRole : "UNKNOWN");
                 metadata.put("file_type", resolvedFileType);
-                metadata.put("ingested_at", String.valueOf(System.currentTimeMillis()));
+                metadata.put("ingested_at", String.valueOf(System.currentTimeMillis())); // Standardized Type (Long)
+                
+                // New Mandatory Metadata for Provenance
+                metadata.put("source", resolvedTitle);
+                metadata.put("upload_date", formattedDate);
+                metadata.put("user_name", userName != null ? userName : "UNKNOWN");
+                metadata.put("department", department != null ? department : "UNKNOWN");
+                metadata.put("decision_number", decisionNumber != null ? decisionNumber : "N/A");
+                metadata.put("classification", classification != null ? classification : "OTHER");
+                metadata.put("project_name", projectName != null ? projectName : "N/A");
+                metadata.put("description", description != null ? description : "");
+                metadata.put("internal_source_flag", String.valueOf(internalSourceFlag));
 
-                // Standardized Keys (Layer 7 Strategy)
-                if (!resolvedDeptIds.isEmpty()) {
+                // Standardized Keys for filtering (STRICT ENFORCEMENT)
+                if ("DEPARTMENT".equalsIgnoreCase(resolvedAccessLevel) && !resolvedDeptIds.isEmpty()) {
                     metadata.put("department_id", String.valueOf(resolvedDeptIds.get(0)));
                 }
 
-                if (!resolvedProjIds.isEmpty()) {
+                if ("PROJECT".equalsIgnoreCase(resolvedAccessLevel) && !resolvedProjIds.isEmpty()) {
                     metadata.put("project_id", String.valueOf(resolvedProjIds.get(0)));
                 }
 
@@ -143,6 +189,36 @@ public class DocumentIngestionService {
         } catch (Exception e) {
             log.error("❌ QUÁ TRÌNH INGESTION BỊ CHẶN LẠI HOẶC LỖI CHO DOC ID {}:", documentId, e);
             throw new RuntimeException("Ingestion failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Removes all vectors associated with a document ID from Qdrant.
+     */
+    public void deleteFromVectorStore(Long documentId) {
+        log.info("[VECTOR-CLEANUP] Removing vectors for docId: {}", documentId);
+        // Using Spring AI Filter to delete (if supported) or manually via REST if needed.
+        // For Qdrant, we use the filter to identify points.
+        try {
+            // Spring AI VectorStore.delete usually only accepts a list of document IDs (point IDs).
+            // We first search for chunks with the matching document_id metadata.
+            SearchRequest searchRequest = SearchRequest.query("")
+                    .withFilterExpression(new FilterExpressionBuilder().eq("document_id", String.valueOf(documentId)).build())
+                    .withTopK(1000); // Support up to 1000 chunks per document
+            
+            List<org.springframework.ai.document.Document> chunks = vectorStore.similaritySearch(searchRequest);
+            
+            if (!chunks.isEmpty()) {
+                List<String> chunkIds = chunks.stream()
+                        .map(org.springframework.ai.document.Document::getId)
+                        .collect(Collectors.toList());
+                vectorStore.delete(chunkIds);
+                log.info("[VECTOR-CLEANUP] Successfully purged {} chunks for docId: {}", chunkIds.size(), documentId);
+            } else {
+                log.info("[VECTOR-CLEANUP] No chunks found for docId: {} (already clean or never ingested)", documentId);
+            }
+        } catch (Exception e) {
+            log.error("[VECTOR-CLEANUP] [FAILED] Could not purge vectors for docId: {}. Error: {}", documentId, e.getMessage());
         }
     }
 }

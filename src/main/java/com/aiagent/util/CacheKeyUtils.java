@@ -1,8 +1,6 @@
 package com.aiagent.util;
 
 import com.aiagent.model.User;
-import com.aiagent.rag.QueryIntentClassifier;
-
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -16,12 +14,10 @@ public final class CacheKeyUtils {
     public static String generateRetrievalKey(
             String query,
             User user,
-            Set<String> activeDocNames,
-            QueryIntentClassifier.Intent intent
+            Set<String> activeDocNames
     ) {
         String normalizedQuery = NormalizationUtils.normalize(query);
         String userId = (user != null) ? String.valueOf(user.getId()) : "guest";
-        String intentStr = (intent != null) ? intent.name() : "unknown";
 
         String sortedDocs = "";
         if (activeDocNames != null && !activeDocNames.isEmpty()) {
@@ -38,10 +34,9 @@ public final class CacheKeyUtils {
         }
 
         return String.format(
-                "v1|q:%s|u:%s|intent:%s|docs:[%s]",
+                "v1|q:%s|u:%s|docs:[%s]",
                 normalizedQuery,
                 userId,
-                intentStr,
                 sortedDocs
         );
     }

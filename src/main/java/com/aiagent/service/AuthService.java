@@ -4,8 +4,6 @@ import com.aiagent.dto.AuthResponse;
 import com.aiagent.dto.GoogleLoginRequest;
 import com.aiagent.dto.LoginRequest;
 import com.aiagent.dto.RegisterRequest;
-import com.aiagent.model.Department;
-import com.aiagent.model.Role;
 import com.aiagent.model.User;
 import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.repository.RoleRepository;

@@ -1,19 +1,27 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
-    <div th:fragment="header(title, subtitle)" class="docs-header">
+    <div th:fragment="header(title, subtitle)" class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
-            <h1 th:text="${title}">Tiêu đề</h1>
-            <p th:if="${subtitle != null}" class="docs-subtitle" th:text="${subtitle}">Phụ đề</p>
+            <h1 class="text-xl font-bold text-slate-900" th:text="${title}">Tiêu đề</h1>
+            <p th:if="${subtitle != null}" class="text-sm text-slate-500 mt-0.5" th:text="${subtitle}">Phụ đề</p>
         </div>
-        <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
-            <!-- Global search or specific actions can go here -->
-            <div th:if="${currentUser != null}" class="user-badge" style="display: flex; align-items: center; gap: 8px; background: #f3f4f6; padding: 6px 12px; border-radius: 9999px; font-size: 0.85rem; font-weight: 500;">
-                <span th:text="${currentUser.username}">User</span>
-                <span style="color: #6b7280; font-size: 0.75rem;" th:text="${'(' + currentUser.role.name + ')'}">(Vai trò)</span>
+        <div class="flex items-center gap-4">
+            <!-- User Profile Quick View -->
+            <div th:if="${currentUser != null}" class="flex items-center gap-3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full">
+                <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-200">
+                    <img th:if="${currentUser.avatarUrl != null and !#strings.isEmpty(currentUser.avatarUrl)}"
+                         th:src="${currentUser.avatarUrl}" alt="Avatar" class="w-full h-full object-cover rounded-full">
+                    <span th:unless="${currentUser.avatarUrl != null and !#strings.isEmpty(currentUser.avatarUrl)}"
+                          th:text="${#strings.substring(currentUser.username,0,1).toUpperCase()}">U</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold text-slate-700 leading-none" th:text="${currentUser.username}">User</span>
+                    <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5" th:text="${currentUser.role.name}">Role</span>
+                </div>
             </div>
             
-            <button class="btn-toggle-sidebar" id="toggleSidebar" style="display: none;">
+            <button class="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors" id="toggleSidebar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
         </div>

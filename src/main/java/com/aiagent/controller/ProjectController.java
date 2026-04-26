@@ -3,7 +3,7 @@ package com.aiagent.controller;
 import com.aiagent.model.Project;
 import com.aiagent.model.User;
 import com.aiagent.service.ProjectService;
-import com.aiagent.service.AccessPolicyService;
+import com.aiagent.service.DocumentAccessService;
 import com.aiagent.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -22,7 +22,7 @@ import java.util.List;
 public class ProjectController {
 
     private final ProjectService projectService;
-    private final AccessPolicyService accessPolicyService;
+    private final DocumentAccessService documentAccessService;
     private final UserRepository userRepository;
 
     @GetMapping
@@ -30,7 +30,7 @@ public class ProjectController {
         User user = resolveUser(authentication);
         if (user == null) return "redirect:/login";
 
-        if (!accessPolicyService.canAccessProjectManagement(user)) {
+        if (!documentAccessService.canAccessProjectManagement(user)) {
             redirectAttributes.addFlashAttribute("error", "Bạn không có quyền truy cập trang quản lý dự án.");
             return "redirect:/dashboard";
         }
@@ -48,7 +48,7 @@ public class ProjectController {
         }
 
         model.addAttribute("projects", projects);
-        model.addAttribute("canManage", accessPolicyService.canManageProjects(user));
+        model.addAttribute("canManage", documentAccessService.canManageProjects(user));
         return "projects";
     }
 
@@ -58,7 +58,7 @@ public class ProjectController {
                                 @RequestParam("description") String description,
                                 RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
-        if (!accessPolicyService.canManageProjects(user)) {
+        if (!documentAccessService.canManageProjects(user)) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: Bạn không có quyền tạo dự án.");
             return "redirect:/projects";
         }
@@ -76,7 +76,7 @@ public class ProjectController {
                                 @RequestParam(value = "active", defaultValue = "false") boolean active,
                                 RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
-        if (!accessPolicyService.canManageProjects(user)) {
+        if (!documentAccessService.canManageProjects(user)) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: Bạn không có quyền chỉnh sửa dự án.");
             return "redirect:/projects";
         }
@@ -90,16 +90,20 @@ public class ProjectController {
         return "redirect:/projects";
     }
 
-    @PostMapping("/{id}/delete")
+    @PostMapping("/delete/{id}")
     public String deleteProject(Authentication authentication, @PathVariable Long id, RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
-        if (!accessPolicyService.canManageProjects(user)) {
+        if (!documentAccessService.canManageProjects(user)) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: Bạn không có quyền xoá dự án.");
             return "redirect:/projects";
         }
 
-        projectService.deleteProject(id);
-        redirectAttributes.addFlashAttribute("success", "Xoá dự án thành công!");
+        try {
+            projectService.deleteProject(id);
+            redirectAttributes.addFlashAttribute("success", "Xoá dự án thành công!");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+        }
         return "redirect:/projects";
     }
 
@@ -108,7 +112,7 @@ public class ProjectController {
     @GetMapping("/{id}/members")
     public String listMembers(@PathVariable Long id, Authentication authentication, Model model, RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
-        if (!accessPolicyService.canAccessProjectManagement(user)) {
+        if (!documentAccessService.canAccessProjectManagement(user)) {
              return "redirect:/dashboard";
         }
 
@@ -118,7 +122,7 @@ public class ProjectController {
         model.addAttribute("project", project);
         model.addAttribute("members", projectService.getProjectMembers(project));
         model.addAttribute("allUsers", userRepository.findAll()); // Simple list for adding members
-        model.addAttribute("canManageMembers", accessPolicyService.canManageMembers(user));
+        model.addAttribute("canManageMembers", documentAccessService.canManageMembers(user));
         
         return "project_members";
     }
@@ -127,7 +131,7 @@ public class ProjectController {
     public String addMember(@PathVariable Long id, @RequestParam("userId") Long userId, 
                             Authentication authentication, RedirectAttributes redirectAttributes) {
         User currentUser = resolveUser(authentication);
-        if (!accessPolicyService.canManageMembers(currentUser)) {
+        if (!documentAccessService.canManageMembers(currentUser)) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: Bạn không có quyền quản lý thành viên.");
             return "redirect:/projects/" + id + "/members";
         }
@@ -144,7 +148,7 @@ public class ProjectController {
     public String removeMember(@PathVariable Long id, @RequestParam("userId") Long userId, 
                                Authentication authentication, RedirectAttributes redirectAttributes) {
         User currentUser = resolveUser(authentication);
-        if (!accessPolicyService.canManageMembers(currentUser)) {
+        if (!documentAccessService.canManageMembers(currentUser)) {
             redirectAttributes.addFlashAttribute("error", "Lỗi: Bạn không có quyền quản lý thành viên.");
             return "redirect:/projects/" + id + "/members";
         }

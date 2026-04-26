@@ -93,6 +93,11 @@ public class RagIntegrationTest {
                 java.util.List.of(hrDept.getId()), 
                 java.util.Collections.emptyList(), 
                 com.aiagent.model.AccessLevel.PUBLIC, 
+                null,
+                com.aiagent.model.DocumentClassification.OTHER,
+                null,
+                "Integration Test Doc",
+                true,
                 mockFile, 
                 testUser);
 

@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/chat")
+@RequestMapping(value = "/api/chat", produces = "application/json;charset=UTF-8")
 @RequiredArgsConstructor
 @Slf4j
 public class ChatApiController {

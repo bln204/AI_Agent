@@ -35,18 +35,21 @@ class DocumentServiceTest {
     private DepartmentRepository departmentRepository;
 
     @Mock
-    private com.aiagent.service.AccessPolicyService accessPolicyService;
+    private com.aiagent.service.DocumentAccessService documentAccessService;
 
     @Mock
     private com.aiagent.repository.ProjectRepository projectRepository;
+
+    @Mock
+    private com.aiagent.service.DecisionNumberService decisionNumberService;
 
     private DocumentService documentService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy
-        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, accessPolicyService);
+        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy, decisionNumber
+        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, documentAccessService, decisionNumberService);
         
         // Fix @Value field
         ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");
@@ -60,12 +63,12 @@ class DocumentServiceTest {
         role.setCode(RoleConstants.ROLE_EMPLOYEE);
         uploader.setRole(role);
 
-        when(accessPolicyService.canUpload(uploader)).thenReturn(false);
+        when(documentAccessService.canUpload(uploader)).thenReturn(false);
 
         MockMultipartFile file = new MockMultipartFile("file", "test.pdf", "application/pdf", "test".getBytes());
 
         SecurityException exception = assertThrows(SecurityException.class, () -> {
-            documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, file, uploader);
+            documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null, "desc", true, file, uploader);
         });
 
         assertEquals("Bạn không có quyền tải lên tài liệu.", exception.getMessage());
@@ -86,7 +89,7 @@ class DocumentServiceTest {
         dept.setCode("HR");
         uploader.setDepartment(dept);
 
-        when(accessPolicyService.canUpload(uploader)).thenReturn(true);
+        when(documentAccessService.canUpload(uploader)).thenReturn(true);
         when(departmentRepository.findById(10L)).thenReturn(Optional.of(dept));
         // Fix: Mock findAllById which is used to populate doc.setDepartments
         when(departmentRepository.findAllById(anyList())).thenAnswer(invocation -> {
@@ -100,7 +103,7 @@ class DocumentServiceTest {
         when(documentRepository.save(any(Document.class))).thenReturn(mockedDoc);
 
         // Call with a different department ID (100L) - should be overridden or filtered
-        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, uploader);
+        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null, "desc", true, null, uploader);
 
         // verify that the document saved has the uploader's department
         verify(documentRepository, atLeastOnce()).save(argThat(doc -> 
@@ -122,7 +125,7 @@ class DocumentServiceTest {
         targetDept.setName("IT");
         targetDept.setCode("IT");
         
-        when(accessPolicyService.canUpload(uploader)).thenReturn(true);
+        when(documentAccessService.canUpload(uploader)).thenReturn(true);
         when(departmentRepository.findById(100L)).thenReturn(Optional.of(targetDept));
         when(departmentRepository.findAllById(anyList())).thenAnswer(invocation -> {
             java.util.List<Long> ids = invocation.getArgument(0);
@@ -135,7 +138,7 @@ class DocumentServiceTest {
         when(documentRepository.save(any(Document.class))).thenReturn(mockedDoc);
 
         // Call with department ID 100L
-        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, uploader);
+        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null, "desc", true, null, uploader);
 
         verify(documentRepository, atLeastOnce()).save(argThat(doc -> 
             doc.getDepartments().size() == 1 && 

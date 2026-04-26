@@ -1,8 +1,10 @@
 package com.aiagent.service;
 
+import com.aiagent.model.Document;
 import com.aiagent.model.Project;
 import com.aiagent.model.ProjectMember;
 import com.aiagent.model.User;
+import com.aiagent.repository.DocumentRepository;
 import com.aiagent.repository.ProjectMemberRepository;
 import com.aiagent.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final DocumentRepository documentRepository;
 
     public List<Project> getAllProjects() {
         return projectRepository.findAll();
@@ -99,7 +102,24 @@ public class ProjectService {
 
     @Transactional
     public void deleteProject(Long id) {
-        projectRepository.deleteById(id);
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy dự án ID: " + id));
+
+        // 1. Xoá tất cả thành viên của dự án
+        List<ProjectMember> members = projectMemberRepository.findByProject(project);
+        projectMemberRepository.deleteAll(members);
+
+        // 2. Gỡ bỏ dự án khỏi các tài liệu liên quan
+        List<Document> documents = documentRepository.findByProjectId(id);
+        for (Document doc : documents) {
+            doc.getProjects().remove(project);
+            // Không cần gọi save nếu Entity được quản lý bởi Persistence Context, 
+            // nhưng để chắc chắn và tuân thủ pattern hiện tại:
+            documentRepository.save(doc);
+        }
+
+        // 3. Xoá dự án
+        projectRepository.delete(project);
     }
 
     @Transactional

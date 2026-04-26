@@ -37,8 +37,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      */
     @Query("SELECT DISTINCT d FROM Document d LEFT JOIN d.departments dept LEFT JOIN d.projects proj " +
            "WHERE :roleCode = 'DIRECTOR' " +
-           "OR d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC " +
-           "OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND dept.id = :departmentId) " +
+           "OR (d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC) " +
+           "OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND :departmentId IS NOT NULL AND dept.id = :departmentId) " +
            "OR (d.accessLevel = com.aiagent.model.AccessLevel.PROJECT AND EXISTS (SELECT pm FROM ProjectMember pm WHERE pm.project = proj AND pm.user.id = :userId AND pm.active = true)) " +
            "OR (d.accessLevel = com.aiagent.model.AccessLevel.PRIVATE AND d.uploadedBy.id = :userId)")
     List<Document> findAccessibleDocuments(@Param("userId") Long userId,
@@ -64,7 +64,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
            "  OR LOWER(d.normalizedTitle) LIKE CONCAT('%', :keyword, '%')) " +
            "AND (:roleCode = 'DIRECTOR' " +
            "  OR d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC " +
-           "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND dept.id = :departmentId) " +
+           "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND :departmentId IS NOT NULL AND dept.id = :departmentId) " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.PROJECT AND EXISTS (SELECT pm FROM ProjectMember pm WHERE pm.project = proj AND pm.user.id = :userId AND pm.active = true)) " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.PRIVATE AND d.uploadedBy.id = :userId))",
            countQuery = "SELECT COUNT(DISTINCT d) FROM Document d " +
@@ -75,7 +75,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
            "  OR LOWER(d.normalizedTitle) LIKE CONCAT('%', :keyword, '%')) " +
            "AND (:roleCode = 'DIRECTOR' " +
            "  OR d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC " +
-           "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND dept.id = :departmentId) " +
+           "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND :departmentId IS NOT NULL AND dept.id = :departmentId) " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.PROJECT AND EXISTS (SELECT pm FROM ProjectMember pm WHERE pm.project = proj AND pm.user.id = :userId AND pm.active = true)) " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.PRIVATE AND d.uploadedBy.id = :userId))")
     Page<Document> findAccessibleDocumentsPaginated(
@@ -113,11 +113,41 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
            ") " +
            "AND (:roleCode = 'DIRECTOR' " +
            "  OR d.accessLevel = com.aiagent.model.AccessLevel.PUBLIC " +
-           "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND dept.id = :departmentId) " +
+           "  OR (d.accessLevel = com.aiagent.model.AccessLevel.DEPARTMENT AND :departmentId IS NOT NULL AND dept.id = :departmentId) " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.PROJECT AND EXISTS (SELECT pm FROM ProjectMember pm WHERE pm.project = proj AND pm.user.id = :userId AND pm.active = true)) " +
            "  OR (d.accessLevel = com.aiagent.model.AccessLevel.PRIVATE AND d.uploadedBy.id = :userId))")
     List<Document> findCandidateDocuments(@Param("keyword") String keyword, 
                                           @Param("roleCode") String roleCode, 
                                           @Param("userId") Long userId,
                                           @Param("departmentId") Long departmentId);
+
+    @Query("SELECT d FROM Document d JOIN d.projects p WHERE p.id = :projectId")
+    List<Document> findByProjectId(@Param("projectId") Long projectId);
+
+    java.util.Optional<Document> findByDecisionNumber(String decisionNumber);
+
+    java.util.Optional<Document> findByDocumentUuid(String documentUuid);
+    
+    @Query("SELECT DISTINCT d FROM Document d " +
+           "LEFT JOIN FETCH d.uploadedBy " +
+           "LEFT JOIN FETCH d.departments " +
+           "LEFT JOIN FETCH d.projects " +
+           "WHERE d.id IN :ids")
+    List<Document> findAllByIdInWithAssociations(@Param("ids") java.util.Collection<Long> ids);
+
+    @Query("SELECT d FROM Document d WHERE " +
+           "(:projectName IS NULL OR d.projectName = :projectName) AND " +
+           "(:departmentName IS NULL OR d.departmentName = :departmentName) AND " +
+           "(:uploader IS NULL OR d.uploadedBy.username = :uploader) AND " +
+           "(:role IS NULL OR d.uploaderRole = :role) AND " +
+           "(:decisionNumber IS NULL OR d.decisionNumber = :decisionNumber) AND " +
+           "(:documentType IS NULL OR d.fileType = :documentType) AND " +
+           "(:classification IS NULL OR d.classification = :classification)")
+    List<Document> findWithFilters(@Param("projectName") String projectName,
+                                   @Param("departmentName") String departmentName,
+                                   @Param("uploader") String uploader,
+                                   @Param("role") String role,
+                                   @Param("decisionNumber") String decisionNumber,
+                                   @Param("documentType") String documentType,
+                                   @Param("classification") com.aiagent.model.DocumentClassification classification);
 }
