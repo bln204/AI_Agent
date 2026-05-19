@@ -22,7 +22,6 @@ public class HydrationService {
     private final DocumentRepository documentRepository;
     private final DocumentAccessService documentAccessService;
     
-    // SingleFlight Cache
     private final Map<Set<Long>, CompletableFuture<Map<Long, Document>>> flightCache = new ConcurrentHashMap<>();
 
     public List<org.springframework.ai.document.Document> hydrateAndValidate(
@@ -35,19 +34,15 @@ public class HydrationService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        // 1. Fetch Batch with SingleFlight
         Map<Long, Document> dbMetadata = fetchBatch(docIds);
         final Map<Long, Document> snapshot = Map.copyOf(dbMetadata);
 
-        // 2. Hydration & Categorization
         List<ValidatedChunk> results = chunks.stream()
                 .map(chunk -> validateChunk(chunk, snapshot, user))
                 .collect(Collectors.toList());
 
-        // 3. Metrics Tracking
         logMetrics(results);
 
-        // 4. Production-Ready Filtering: Only allow VALID or high-quality PARTIAL/STALE
         return results.stream()
                 .filter(res -> res.status() == Status.VALID || (res.status() != Status.ORPHAN && isSafeFallback(res.chunk())))
                 .map(ValidatedChunk::chunk)
@@ -63,7 +58,6 @@ public class HydrationService {
 
         Document meta = snapshot.get(id);
 
-        // A. Handle Orphans (Data exists in Qdrant but not in DB)
         if (meta == null) {
             log.warn("[HYDRATION] Orphan vector detected: doc_id={}", id);
             return new ValidatedChunk(chunk, Status.ORPHAN);
@@ -73,20 +67,17 @@ public class HydrationService {
             return new ValidatedChunk(chunk, Status.ORPHAN);
         }
 
-        // B. Handle Version Drift (STALE)
         int vectorVersion = getVersion(chunk);
         boolean isStale = (vectorVersion != -1 && vectorVersion != meta.getVersion());
         if (isStale) {
             log.warn("[HYDRATION] Version drift for doc {}: Vector={}, DB={}", id, vectorVersion, meta.getVersion());
         }
 
-        // C. Security Barrier
         if (!documentAccessService.canAccessDocument(user, meta)) {
             log.warn("[HYDRATION] Access denied for doc {} for user {}", id, user.getEmail());
-            return new ValidatedChunk(chunk, Status.ORPHAN); // Treat as orphan for safety
+            return new ValidatedChunk(chunk, Status.ORPHAN);
         }
 
-        // D. Hydrate Metadata
         updateMetadata(chunk, meta);
         return new ValidatedChunk(chunk, isStale ? Status.STALE : Status.VALID);
     }
@@ -115,7 +106,7 @@ public class HydrationService {
                     return Collections.<Long, com.aiagent.model.Document>emptyMap();
                 }
             }).orTimeout(300, TimeUnit.MILLISECONDS)
-              .thenApply(res -> res) // Help compiler with type inference
+              .thenApply(res -> res)
               .whenComplete((res, ex) -> flightCache.remove(docIds))
         ).join();
     }

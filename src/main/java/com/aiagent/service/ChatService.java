@@ -52,18 +52,6 @@ public class ChatService {
         return messageRepository.findBySessionIdOrderBySequenceNumberAsc(sessionId);
     }
 
-    // ============================================================
-    // STATE MACHINE: Phase 1 — Start Turn (Atomic, <50ms)
-    // ============================================================
-    /**
-     * Atomically creates a USER message and a PENDING AI placeholder.
-     * Uses idempotency key to prevent duplicate processing.
-     * 
-     * Returns a TurnResult containing:
-     * - userMessage: the saved USER message
-     * - aiPlaceholder: the PENDING AI message (to be finalized later)
-     * - alreadyProcessed: true if this idempotencyKey was seen before
-     */
     @Transactional
     @Retryable(
         retryFor = {LockAcquisitionException.class, ObjectOptimisticLockingFailureException.class, PessimisticLockingFailureException.class},
@@ -73,18 +61,15 @@ public class ChatService {
     public TurnResult startTurn(Long sessionId, String content, String idempotencyKey) {
         log.debug("startTurn: session={}, idempotencyKey={}", sessionId, idempotencyKey);
 
-        // 1. SERIALIZE: Lock the session to prevent parallel turns for the same session
-        // Only one thread can proceed past this point for the given sessionId.
         ChatSession session = sessionRepository.findByIdWithLock(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session không tồn tại: " + sessionId));
 
-        // 2. IDEMPOTENCY: Check if THIS specific key was already processed or is running
         Optional<ChatMessage> existing = messageRepository.findBySessionIdAndIdempotencyKey(sessionId, idempotencyKey);
         if (existing.isPresent()) {
             ChatMessage existingMsg = existing.get();
             log.info("Idempotency hit: session={}, key={}, status={}", sessionId, idempotencyKey, existingMsg.getStatus());
             
-            // Find the AI pair (next sequence)
+
             List<ChatMessage> allMessages = messageRepository.findBySessionIdOrderBySequenceNumberAsc(sessionId);
             ChatMessage aiPair = allMessages.stream()
                 .filter(m -> m.getSequenceNumber() != null && existingMsg.getSequenceNumber() != null 
@@ -96,8 +81,6 @@ public class ChatService {
             return new TurnResult(existingMsg, aiPair, true);
         }
 
-        // 3. CONCURRENCY GUARD: Is there ANOTHER active turn (different key) in this session?
-        // This prevents parallel LLM calls but allows idempotency retries for the SAME key.
         boolean isBusy = messageRepository.existsBySessionIdAndStatusAndIdempotencyKeyNot(
                 sessionId, MessageStatus.IN_PROGRESS, idempotencyKey);
         
@@ -106,13 +89,10 @@ public class ChatService {
             throw new IllegalStateException("SESSION_BUSY");
         }
 
-        // 4. Update sequence counter
         long currentSeq = session.getLastSequenceNumber() != null ? session.getLastSequenceNumber() : 0L;
         long userSeq = currentSeq + 1;
         long aiSeq = currentSeq + 2;
         session.setLastSequenceNumber(aiSeq);
-
-        // 5. Auto-title
         if (countBySessionId(sessionId) == 0 && isDefaultTitle(session.getTitle())) {
             String autoTitle = content.length() > 40 ? content.substring(0, 40) + "..." : content;
             session.setTitle(autoTitle);
@@ -120,7 +100,6 @@ public class ChatService {
 
         sessionRepository.save(session);
 
-        // 6. Insert USER message (COMPLETED)
         ChatMessage userMsg = new ChatMessage();
         userMsg.setSession(session);
         userMsg.setRole("USER");
@@ -130,27 +109,18 @@ public class ChatService {
         userMsg.setSequenceNumber(userSeq);
         messageRepository.save(userMsg);
 
-        // 7. Insert AI placeholder (IN_PROGRESS)
         ChatMessage aiPlaceholder = new ChatMessage();
         aiPlaceholder.setSession(session);
         aiPlaceholder.setRole("AI");
         aiPlaceholder.setContent(""); 
         aiPlaceholder.setStatus(MessageStatus.IN_PROGRESS);
         aiPlaceholder.setSequenceNumber(aiSeq);
-        aiPlaceholder.setIdempotencyKey(idempotencyKey); // Also tag AI message with same key
+        aiPlaceholder.setIdempotencyKey(idempotencyKey); 
         messageRepository.save(aiPlaceholder);
 
         log.info("Turn started: session={}, userSeq={}, aiSeq={}", sessionId, userSeq, aiSeq);
         return new TurnResult(userMsg, aiPlaceholder, false);
     }
-
-    // ============================================================
-    // STATE MACHINE: Phase 3 — Finalize Turn (Atomic, <10ms)
-    // ============================================================
-    /**
-     * Updates the PENDING AI placeholder with actual LLM content.
-     * Called AFTER the external AI call completes (outside any transaction).
-     */
     @Transactional
     @Retryable(
         retryFor = {LockAcquisitionException.class, ObjectOptimisticLockingFailureException.class},
@@ -166,7 +136,6 @@ public class ChatService {
             return aiMsg;
         }
 
-        // STRICT CONTRACT VALIDATION
         if (finalStatus == MessageStatus.COMPLETED && (aiContent == null || aiContent.isBlank())) {
             log.error("[STRICT-CONTRACT] COMPLETED with empty content. messageId={}, errorCode={}", aiMessageId, errorCode);
             finalStatus = MessageStatus.FAILED;
@@ -184,9 +153,6 @@ public class ChatService {
         return saved;
     }
 
-    // ============================================================
-    // Legacy method — kept for backward compatibility during migration
-    // ============================================================
     @Transactional
     @Retryable(
         retryFor = {LockAcquisitionException.class, ObjectOptimisticLockingFailureException.class, PessimisticLockingFailureException.class},
@@ -202,7 +168,6 @@ public class ChatService {
         msg.setContent(content);
         msg.setStatus(MessageStatus.COMPLETED);
 
-        // Assign sequence number
         long currentSeq = session.getLastSequenceNumber() != null ? session.getLastSequenceNumber() : 0L;
         long nextSeq = currentSeq + 1;
         session.setLastSequenceNumber(nextSeq);
@@ -233,9 +198,6 @@ public class ChatService {
         log.info("Session {} and its messages deleted.", sessionId);
     }
 
-    // ============================================================
-    // Helper Methods
-    // ============================================================
     private boolean isDefaultTitle(String title) {
         return title == null || title.equals("Cuộc trò chuyện mới");
     }
@@ -244,9 +206,6 @@ public class ChatService {
         return messageRepository.countBySessionId(sessionId);
     }
 
-    /**
-     * Value object holding the result of a Turn start.
-     */
     public record TurnResult(
         ChatMessage userMessage,
         ChatMessage aiPlaceholder,

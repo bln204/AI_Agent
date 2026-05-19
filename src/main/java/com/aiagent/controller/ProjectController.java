@@ -40,8 +40,6 @@ public class ProjectController {
             projects = projectService.getAllProjects();
         } else {
             projects = projectService.getProjectsForUser(user);
-            // Business Rule: Managers can see all projects read-only if not assigned?
-            // User requested: Default MANAGER to see ALL projects if no "assigned only" rule.
             if (com.aiagent.util.RoleConstants.ROLE_MANAGER.equals(user.getRole().getCode())) {
                 projects = projectService.getAllProjects();
             }
@@ -106,8 +104,6 @@ public class ProjectController {
         }
         return "redirect:/projects";
     }
-
-    // --- Member Management ---
 
     @GetMapping("/{id}/members")
     public String listMembers(@PathVariable Long id, Authentication authentication, Model model, RedirectAttributes redirectAttributes) {

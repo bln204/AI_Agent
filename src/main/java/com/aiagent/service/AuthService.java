@@ -51,14 +51,11 @@ public class AuthService {
         newUser.setEmail(registerRequest.getEmail());
         newUser.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
         
-        // Find default department (or by code if registerRequest has one, but it seems it's a string from UI)
-        // For now, let's assume registration from UI might pass a department name or we default to none
         if (registerRequest.getDepartment() != null && !registerRequest.getDepartment().isEmpty()) {
             departmentRepository.findByName(registerRequest.getDepartment())
                     .ifPresent(newUser::setDepartment);
         }
         
-        // Default role: Nhân viên
         roleRepository.findByCode(RoleConstants.ROLE_EMPLOYEE)
                 .ifPresent(newUser::setRole);
         
@@ -86,7 +83,6 @@ public class AuthService {
 
         User user = userOptional.get();
 
-        // Check if password matches (if password is set)
         if (user.getPassword() != null
                 && !passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             return AuthResponse.builder()

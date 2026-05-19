@@ -27,19 +27,10 @@ public class DataMigrationService {
 
     @Transactional
     public void migrate() {
-        // 1. Seed Roles
         Map<String, Role> roles = seedRoles();
-
-        // 2. Seed Departments
         Map<String, Department> departments = seedDepartments();
-
-        // 3. Migrate Users
         migrateUsers(roles, departments);
-
-        // 4. Migrate Documents
         migrateDocuments(departments);
-
-        // 5. Rebuild Document Normalization (NEW)
         rebuildDocumentNormalization();
 
         log.info("Data migration completed successfully.");

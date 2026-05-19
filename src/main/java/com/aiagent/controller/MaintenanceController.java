@@ -32,10 +32,6 @@ public class MaintenanceController {
         List<Document> documents = documentRepository.findAll();
         log.info("[MAINTENANCE] Found {} documents to re-index.", documents.size());
 
-        // Note: Actual Collection switching should be done via application.properties or a DynamicVectorStore bean.
-        // For now, we just ingest with the same service which uses the configured vectorStore.
-        // In a true Phase 2 swap, we'd inject a second VectorStore bean targetting v2.
-
         int count = 0;
         for (Document doc : documents) {
             try {

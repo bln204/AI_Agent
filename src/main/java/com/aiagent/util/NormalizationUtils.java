@@ -16,10 +16,8 @@ public class NormalizationUtils {
             return "";
         }
 
-        // 1. NFC Normalization (Required for end-to-end consistency)
         String normalized = Normalizer.normalize(input, Normalizer.Form.NFC);
         
-        // 2. Collapse whitespace and trim
         return normalized
                 .replaceAll("\\s+", " ")
                 .trim();

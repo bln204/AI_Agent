@@ -27,19 +27,15 @@ public class AiChatService {
         log.info("[AI-CHAT] session={}, user={}, question='{}'", 
                 sessionId, user != null ? user.getEmail() : "Guest", question);
 
-        // 1. Intent Detection (Greeting Fallback)
         if (isGreeting(normalizedQuestion)) {
             return ChatGenerationResult.success(generateGreetingResponse(normalizedQuestion));
         }
 
         try {
-            // 2. Prepare History Text
             String historyText = formatHistory(history);
 
-            // 3. Prepare Access Filter
             org.springframework.ai.vectorstore.filter.Filter.Expression filter = documentAccessService.buildVectorFilter(user);
 
-            // 4. Delegate to RAG Service (The Core Refactor)
             String response = ragService.processQuery(question, user, filter, historyText);
 
             return ChatGenerationResult.success(response);

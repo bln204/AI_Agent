@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 public final class CacheKeyUtils {
 
     private CacheKeyUtils() {
-        // utility class
+        
     }
 
     public static String generateRetrievalKey(

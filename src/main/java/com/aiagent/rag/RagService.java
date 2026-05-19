@@ -11,8 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.ArrayList;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,14 +26,11 @@ public class RagService {
 
     @Transactional(readOnly = true)
     public String processQuery(String question, User user, Filter.Expression filter, String historyText) {
-        // 1. Retrieve Raw Documents
         List<Document> rawDocuments = vectorStoreService.search(question, filter);
 
-        // 2. Phase 3: Hydration & Validation Barrier
         log.info("[RAG-PIPELINE] Validating {} candidates through hydration barrier...", rawDocuments.size());
         List<Document> validDocuments = hydrationService.hydrateAndValidate(rawDocuments, user);
 
-        // 3. Handle Edge Case: No valid documents found
         if (validDocuments.isEmpty()) {
             if (!rawDocuments.isEmpty()) {
                 log.warn("[RAG-PIPELINE] Retrieval found {} chunks, but ALL were filtered by security barrier for user {}", 
@@ -45,7 +40,6 @@ public class RagService {
             return buildFinalResponse(promptBuilder.getFallbackMessage(), "Không tìm thấy dữ liệu liên quan trong hệ thống.");
         }
         
-        // [STRICT FIX] Filter out low-quality chunks (< 50 chars)
         List<Document> highQualityDocuments = validDocuments.stream()
                 .filter(doc -> doc.getContent() != null && doc.getContent().trim().length() >= 50)
                 .collect(Collectors.toList());
@@ -55,13 +49,12 @@ public class RagService {
             highQualityDocuments = validDocuments;
         }
 
-        // 4. Balanced Deduplication (Round-Robin)
         log.info("[RAG-PIPELINE] Applying Balanced Top-K Deduplication (Round-Robin) on {} quality chunks...", highQualityDocuments.size());
         Map<String, List<Document>> docsBySource = highQualityDocuments.stream()
                 .collect(Collectors.groupingBy(doc -> (String) doc.getMetadata().getOrDefault("document_id", "unknown")));
 
         java.util.List<Document> deduplicatedDocs = new java.util.ArrayList<>();
-        int maxChunksPerDoc = 3; // Prevent one doc from dominating context
+        int maxChunksPerDoc = 3;
         int totalLimit = 10;
         
         boolean added;
@@ -78,19 +71,13 @@ public class RagService {
             round++;
         } while (added && deduplicatedDocs.size() < totalLimit);
 
-        // 5. Assemble Context String for LLM
         String context = deduplicatedDocs.stream()
                 .map(Document::getContent)
                 .collect(Collectors.joining("\n\n---\n\n"));
-
-        // [DEBUG LOG] Print final context string as requested
         log.info("[RAG-CONTEXT] Final context string (length: {} chars):\n{}", context.length(), context);
-
-        // 6. Build Provenance Data (Using Hydrated Metadata)
         List<ProvenanceBuilder.SourceMetadata> sources = provenanceBuilder.buildProvenanceData(deduplicatedDocs);
         String provenanceString = formatProvenance(sources);
 
-        // 7. Generate Answer via LLM with Fail-Safe
         log.info("[RAG-PIPELINE] Calling LLM with {} validated chunks (deduplicated)...", deduplicatedDocs.size());
         String prompt = promptBuilder.buildPrompt(question, context, historyText, provenanceString);
         
@@ -101,10 +88,8 @@ public class RagService {
                 return aiAnswer.trim();
             }
         } catch (Exception e) {
-            // Handled below
         }
 
-        // Fail-Safe: Return controlled fallback response if LLM fails
         log.warn("[RAG-FAILSAFE] LLM unavailable, returning safe fallback response");
         logFinalMetrics(deduplicatedDocs, context.length(), false);
         return buildFailsafeResponse(sources);

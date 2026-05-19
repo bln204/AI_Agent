@@ -18,9 +18,6 @@ public class RagReindexService {
     private final DocumentRepository documentRepository;
     private final DocumentIngestionService documentIngestionService;
 
-    /**
-     * Re-indexes all documents that have a valid file path in the database.
-     */
     @Transactional(readOnly = true)
     public void reindexAllDocuments() {
         log.info("[RAG-REINDEX] Scanning database for documents to re-index...");
@@ -46,7 +43,6 @@ public class RagReindexService {
                     continue;
                 }
 
-                // Noise/Test Document Filter for Re-indexing
                 String title = doc.getTitle().toLowerCase();
                 if (title.contains("test") || title.contains("demo") || title.contains("sample")) {
                     log.info("[RAG-REINDEX] Skipping test/demo document: {}", doc.getTitle());
@@ -64,7 +60,6 @@ public class RagReindexService {
                 log.info("[RAG-REINDEX] Processing [{}/{}]: ID={}, Title='{}'", 
                         (successCount + skipCount + errorCount + 1), documents.size(), doc.getId(), doc.getTitle());
 
-                // Prepare metadata from eager fetched associations
                 List<Long> deptIds = doc.getDepartments().stream()
                         .map(com.aiagent.model.Department::getId)
                         .collect(Collectors.toList());

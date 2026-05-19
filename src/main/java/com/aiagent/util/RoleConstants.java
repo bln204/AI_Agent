@@ -16,10 +16,6 @@ public class RoleConstants {
         "Nhân viên", ROLE_EMPLOYEE
     );
 
-    /**
-     * Map a potentially fragile Vietnamese role label to a stable code.
-     * If no match, returns ROLE_GUEST.
-     */
     public static String fromVietnamese(String viRole) {
         if (viRole == null) return ROLE_GUEST;
         return VI_TO_CODE.getOrDefault(viRole.trim(), ROLE_GUEST);

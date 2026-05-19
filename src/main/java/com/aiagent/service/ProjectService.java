@@ -50,9 +50,6 @@ public class ProjectService {
 
     private String generateUniqueCode(String name) {
         String baseCode = slugify(name);
-        // Project.code length is 50. 
-        // suffix part: _ + currentTimeMillis (13) + _ + attempts (1-2) = ~16 chars.
-        // Base should be max 30 to stay safe under 50.
         if (baseCode.length() > 30) {
             baseCode = baseCode.substring(0, 30);
         }
@@ -72,18 +69,15 @@ public class ProjectService {
     private String slugify(String name) {
         if (name == null) return "";
         
-        // Normalize to remove accents
         String temp = Normalizer.normalize(name, Normalizer.Form.NFD);
         Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
         String result = pattern.matcher(temp).replaceAll("");
         
-        // Remove non-alphanumeric and spaces with underscores
         result = result.replaceAll("[^a-zA-Z0-9 ]", "")
                        .replace(" ", "_")
                        .replaceAll("_+", "_")
                        .toUpperCase();
         
-        // Remove leading/trailing underscores
         if (result.startsWith("_")) result = result.substring(1);
         if (result.endsWith("_")) result = result.substring(0, result.length() - 1);
         
@@ -105,20 +99,14 @@ public class ProjectService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy dự án ID: " + id));
 
-        // 1. Xoá tất cả thành viên của dự án
         List<ProjectMember> members = projectMemberRepository.findByProject(project);
         projectMemberRepository.deleteAll(members);
 
-        // 2. Gỡ bỏ dự án khỏi các tài liệu liên quan
         List<Document> documents = documentRepository.findByProjectId(id);
         for (Document doc : documents) {
             doc.getProjects().remove(project);
-            // Không cần gọi save nếu Entity được quản lý bởi Persistence Context, 
-            // nhưng để chắc chắn và tuân thủ pattern hiện tại:
             documentRepository.save(doc);
         }
-
-        // 3. Xoá dự án
         projectRepository.delete(project);
     }
 

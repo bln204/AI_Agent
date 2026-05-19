@@ -24,7 +24,6 @@ public class GlobalControllerAdvice {
         User user = resolveUser(auth);
         if (user != null) {
             model.addAttribute("currentUser", user);
-            // Also keep these for backward compatibility with some existing templates
             model.addAttribute("userName",   user.getUsername());
             model.addAttribute("userEmail",  user.getEmail());
             model.addAttribute("userRole",   user.getRole() != null ? user.getRole().getName() : "Nhân viên");

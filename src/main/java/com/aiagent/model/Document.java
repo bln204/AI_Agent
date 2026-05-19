@@ -101,7 +101,6 @@ public class Document {
     @JoinColumn(name = "uploaded_by", nullable = false)
     private User uploadedBy;
 
-    // Expose chỉ username để Thymeleaf dùng
     @Transient
     public String getUploaderName() {
         return uploadedBy != null ? uploadedBy.getUsername() : "N/A";
@@ -126,7 +125,6 @@ public class Document {
             this.normalizedTitle = com.aiagent.util.NormalizationUtils.normalize(this.title);
         }
 
-        // Sync flattened fields for RAG if not set
         if (uploadedBy != null) {
             if (uploaderRole == null && uploadedBy.getRole() != null) {
                 uploaderRole = uploadedBy.getRole().getName();
