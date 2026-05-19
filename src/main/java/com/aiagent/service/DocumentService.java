@@ -85,7 +85,6 @@ public class DocumentService {
             throw new SecurityException("Bạn không có quyền tải lên tài liệu.");
         }
 
-        // Validation based on business rules
         if (AccessLevel.DEPARTMENT.equals(accessLevel) && (departmentIds == null || departmentIds.isEmpty())) {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một phòng ban cho mức truy cập DEPARTMENT.");
         }
@@ -103,19 +102,16 @@ public class DocumentService {
         doc.setInternalSourceFlag(internalSourceFlag);
         doc.setProjectName(projectName);
         
-        // Auto-generate decision number if applicable
         if (com.aiagent.model.DocumentClassification.DECISION_DOCUMENT.equals(classification)) {
             doc.setDecisionNumber(decisionNumberService.generateNextDecisionNumber());
         } else {
             doc.setDecisionNumber(decision);
         }
 
-        // Security Rule: Mutually exclusive associations based on AccessLevel
         if (AccessLevel.DEPARTMENT.equals(accessLevel)) {
             doc.setProjects(new java.util.HashSet<>());
             doc.setProjectName(null);
             
-            // Security Guard: Manager restriction to own department
             if (RoleConstants.ROLE_MANAGER.equals(uploader.getRole().getCode()) && uploader.getDepartment() != null) {
                 log.info("[SECURITY-ENFORCE] Restricting MANAGER {} to upload only to department: {}", 
                         uploader.getEmail(), uploader.getDepartment().getCode());
@@ -141,8 +137,6 @@ public class DocumentService {
             doc.setDepartmentName(null);
             doc.setProjectName(null);
         } else if (AccessLevel.PUBLIC.equals(accessLevel)) {
-            // Public can have associations for info, but usually empty is cleaner
-            // Let's keep them if provided, or clear if desired. User didn't specify.
         }
 
         Document savedDoc = documentRepository.save(doc);
@@ -154,7 +148,6 @@ public class DocumentService {
 
             documentRepository.save(savedDoc);
 
-            // CRITICAL FIX: Eagerly resolve all lazy-loaded associations
             java.util.List<Long> resolvedDeptIds = savedDoc.getDepartments().stream()
                     .map(com.aiagent.model.Department::getId)
                     .collect(java.util.stream.Collectors.toList());
@@ -231,17 +224,14 @@ public class DocumentService {
             throw new SecurityException("Bạn không có quyền xoá tài liệu này.");
         }
         
-        // 1. Remove from Vector Store (CRITICAL: Prevent Orphan Vectors)
         try {
             documentIngestionService.deleteFromVectorStore(id);
         } catch (Exception e) {
             log.error("Failed to remove document {} from vector store: {}", id, e.getMessage());
         }
 
-        // 2. Remove from DB
         documentRepository.delete(doc);
         
-        // 3. Remove from Disk
         if (doc.getFilePath() != null) {
             try {
                 Files.deleteIfExists(Paths.get(doc.getFilePath()));

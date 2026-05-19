@@ -25,32 +25,24 @@ public class DocumentAccessService {
     public boolean canAccessDocument(User user, Document doc) {
         if (doc == null) return false;
         
-        // 1. DIRECTOR sees everything
         if (user != null && user.getRole() != null && 
             RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode())) {
             return true;
         }
-
-        // 2. PUBLIC is accessible to everyone
         if (AccessLevel.PUBLIC.equals(doc.getAccessLevel())) {
             return true;
         }
 
         if (user == null) return false;
 
-        // 3. PRIVATE: Only uploader (and Director, handled above)
         if (AccessLevel.PRIVATE.equals(doc.getAccessLevel())) {
             return doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(user.getId());
         }
-
-        // 4. DEPARTMENT: User must have a department and it must match
         if (AccessLevel.DEPARTMENT.equals(doc.getAccessLevel())) {
             if (user.getDepartment() == null) return false;
             return doc.getDepartments().stream()
                     .anyMatch(d -> d.getId().equals(user.getDepartment().getId()));
         }
-
-        // 5. PROJECT: User must be an active member of one of the document's projects
         if (AccessLevel.PROJECT.equals(doc.getAccessLevel())) {
             return doc.getProjects().stream()
                     .anyMatch(p -> projectMemberRepository.existsByProjectAndUser(p, user));
@@ -62,36 +54,28 @@ public class DocumentAccessService {
     public Filter.Expression buildVectorFilter(User user) {
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         
-        // 1. GUEST/NULL sees only PUBLIC
         if (user == null) {
             return b.eq("access_level", "PUBLIC").build();
         }
 
         String roleCode = user.getRole() != null ? user.getRole().getCode() : RoleConstants.ROLE_GUEST;
         
-        // 2. DIRECTOR sees everything (no filter)
         if (RoleConstants.ROLE_DIRECTOR.equals(roleCode)) {
             return null;
         }
-
-        // 3. Collect accessible scopes
         List<Long> projectLongIds = projectMemberRepository.findByUser(user).stream()
                 .filter(ProjectMember::isActive)
                 .map(pm -> pm.getProject().getId())
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
 
-        // Build the OR chain
-        // Start with PUBLIC
         FilterExpressionBuilder.Op combined = b.eq("access_level", "PUBLIC");
 
-        // Add PRIVATE (Owned by user)
         combined = b.or(combined, b.and(
             b.eq("access_level", "PRIVATE"),
             b.eq("uploader_id", String.valueOf(user.getId()))
         ));
 
-        // Add DEPARTMENT
         if (user.getDepartment() != null) {
             combined = b.or(combined, b.and(
                 b.eq("access_level", "DEPARTMENT"),
@@ -99,7 +83,6 @@ public class DocumentAccessService {
             ));
         }
 
-        // Add PROJECT
         if (!projectLongIds.isEmpty()) {
             Object[] projectIdStrings = projectLongIds.stream()
                     .map(String::valueOf)

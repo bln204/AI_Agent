@@ -34,7 +34,6 @@ public class AiController {
     public ResponseEntity<String> ingestDocument(@RequestParam("file") MultipartFile file) {
         try {
             User user = getCurrentUser();
-            // Ingest as PRIVATE specifically for this user
             documentService.uploadDocument(
                     file.getOriginalFilename(), 
                     "", 

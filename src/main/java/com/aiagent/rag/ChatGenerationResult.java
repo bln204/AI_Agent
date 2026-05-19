@@ -4,10 +4,6 @@ import com.aiagent.model.MessageStatus;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**
- * Value object representing the result of an AI generation attempt.
- * Enforces a strict contract between generation outcome and system status.
- */
 @Getter
 @RequiredArgsConstructor
 public class ChatGenerationResult {

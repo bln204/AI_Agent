@@ -27,10 +27,6 @@ public class ProvenanceBuilder {
         private double score;
     }
 
-    /**
-     * Extracts and deduplicates metadata from retrieved documents.
-     * Filters out null document IDs and keeps the highest score for each document.
-     */
     public List<SourceMetadata> buildProvenanceData(List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             return Collections.emptyList();
@@ -42,9 +38,8 @@ public class ProvenanceBuilder {
             Map<String, Object> metadata = doc.getMetadata();
             String docId = String.valueOf(metadata.get("document_id"));
             
-            // 1. Handle potential null document_id to avoid runtime errors
             if (docId == null || "null".equals(docId) || docId.isBlank()) {
-                continue; // Skip documents without valid ID
+                continue;
             }
 
             double currentScore = getScore(doc);
@@ -67,7 +62,6 @@ public class ProvenanceBuilder {
             }
         }
 
-        // Return sorted by score (descending), limited to top 3
         return uniqueSources.values().stream()
                 .sorted(Comparator.comparing(SourceMetadata::getScore).reversed())
                 .limit(3)

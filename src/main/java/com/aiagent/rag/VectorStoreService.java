@@ -24,10 +24,6 @@ public class VectorStoreService {
     @Value("${app.rag.top-k:10}")
     private int topK;
 
-    /**
-     * Performs a similarity search with a mandatory threshold filter and detailed
-     * logging.
-     */
     public List<Document> search(String query, Filter.Expression filterExpression) {
         log.info("[VECTOR-SEARCH] Initializing search for query: '{}', threshold: {}", query, defaultThreshold);
 
@@ -38,7 +34,6 @@ public class VectorStoreService {
 
         List<Document> results = vectorStore.similaritySearch(request);
 
-        // Verification Logging: Ensure similarity score behavior is verified
         if (results.isEmpty()) {
             log.warn("[VECTOR-SEARCH] No documents found above threshold {}", defaultThreshold);
         } else {
@@ -47,8 +42,6 @@ public class VectorStoreService {
                 Document doc = results.get(i);
                 double rawScore = getScore(doc);
                 
-                // Qdrant Metric Normalization: Qdrant Cosine returns Distance [0, 2]
-                // Similarity = 1 - Distance
                 double similarity = 1.0 - rawScore; 
                 if (similarity < 0) similarity = 0;
                 if (similarity > 1) similarity = 1;

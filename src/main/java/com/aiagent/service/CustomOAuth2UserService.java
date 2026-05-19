@@ -87,8 +87,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                         .ifPresent(newUser::setDepartment);
             }
             if (p.getRole() != null) {
-                // Here we might need to map from Role label to Code or Name
-                // Since GoogleUserPending has "Trưởng phòng", "Nhân viên"... we search by name
                 roleRepository.findByName(p.getRole())
                         .ifPresent(newUser::setRole);
             }

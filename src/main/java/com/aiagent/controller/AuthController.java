@@ -94,7 +94,7 @@ public class AuthController {
         return "redirect:/profile";
     }
 
-    // ─── API: lấy thông tin user hiện tại ───────────────────────────────────
+    // API: lấy thông tin user hiện tại 
     @GetMapping("/api/me")
     @ResponseBody
     public Object currentUser(Authentication authentication) {
@@ -114,7 +114,7 @@ public class AuthController {
         );
     }
 
-    // ─── Helper: lấy User entity từ bất kỳ loại Authentication ─────────────
+    // Helper: lấy User entity từ bất kỳ loại Authentication 
     private User resolveUser(Authentication authentication) {
         if (authentication == null) return null;
         Object principal = authentication.getPrincipal();

@@ -8,10 +8,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
-/**
- * Runner to trigger RAG re-indexing on application startup.
- * Controlled by configuration flag app.rag.reindex-on-startup (default: false).
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j

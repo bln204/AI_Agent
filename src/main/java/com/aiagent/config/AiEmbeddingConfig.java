@@ -13,19 +13,14 @@ public class AiEmbeddingConfig {
 
     @Bean
     public EmbeddingModel embeddingModel() throws Exception {
-        // --- 1. Force ONNX Engine to prevent PyTorch initialization issues ---
         System.setProperty("DJL_DEFAULT_ENGINE", "OnnxRuntime");
         
-        // --- 2. Synchronized Eager Initialization ---
         log.info("⏳ Initializing Local Transformers Embedding Model (ONNX)...");
         TransformersEmbeddingModel embeddingModel = new TransformersEmbeddingModel();
         
         try {
-            // This loads the model resources and initializes the engine
             embeddingModel.afterPropertiesSet();
             
-            // --- 3. Warm-up Call ---
-            // Force native libraries to load and GPU/CPU delegate to bind early
             log.info("🔥 Warming up embedding model with dummy request...");
             embeddingModel.embed("warmup");
             

@@ -7,6 +7,6 @@ public class DocumentRequest {
     private String title;
     private String content;
     private String department;
-    // PUBLIC / DEPARTMENT / PRIVATE
+    // PUBLIC / DEPARTMENT / PROJECT / PRIVATE
     private String accessLevel;
 }

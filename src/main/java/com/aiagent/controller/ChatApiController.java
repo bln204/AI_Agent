@@ -65,16 +65,13 @@ public class ChatApiController {
                 m.getContent(),
                 m.getStatus().name(),
                 m.getErrorCode(),
-                false // History doesn't typically require real-time retry status
+                false
             ))
             .toList();
             
         return ResponseEntity.ok(dtos);
     }
 
-    // ============================================================
-    // HARDENED: Send message with idempotency + state machine
-    // ============================================================
     @PostMapping("/sessions/{id}/messages")
     public ResponseEntity<ChatMessageResponse> sendMessage(@PathVariable Long id,
                                                             @RequestBody Map<String, String> body,
@@ -89,11 +86,9 @@ public class ChatApiController {
             String content = body.getOrDefault("content", "").trim();
             if (content.isEmpty()) return ResponseEntity.badRequest().build();
 
-            // Log normalized query for internal tracking
             log.info("[CHAT] Received query for session {}: '{}' (normalized: '{}')", 
                     id, content, com.aiagent.util.NormalizationUtils.normalize(content));
 
-            // MANDATORY: Idempotency key from client
             String idempotencyKey = body.get("idempotencyKey");
             if (idempotencyKey == null || idempotencyKey.isBlank()) {
                 log.warn("[SECURITY-GUARD] Rejecting request: missing idempotencyKey for session {}", id);
@@ -105,7 +100,6 @@ public class ChatApiController {
                 return ResponseEntity.ok(toResponse(pseudoMsg, false));
             }
 
-            // ─── PHASE 1: Atomic Start Turn (DB Transaction + Lock) ───
             ChatService.TurnResult turnResult;
             try {
                 turnResult = chatService.startTurn(id, content, idempotencyKey);
@@ -122,7 +116,6 @@ public class ChatApiController {
                 throw busyEx;
             }
 
-            // If this idempotencyKey was already processed or is running:
             if (turnResult.alreadyProcessed()) {
                 ChatMessage existingAi = turnResult.aiPlaceholder();
 
@@ -133,28 +126,20 @@ public class ChatApiController {
 
                 if (existingAi != null && existingAi.getStatus() == MessageStatus.IN_PROGRESS) {
                     log.info("Idempotency hit (IN_PROGRESS): session={}, key={}", id, idempotencyKey);
-                    // Standardize IN_PROGRESS response as well or fallback to simple map if it's transitory.
-                    // For consistency, let's use toResponse with a pseudo-retryable flag if needed.
                     return ResponseEntity.ok(toResponse(existingAi, false));
                 }
                 
-                // For RETRYABLE_ERROR or FAILED, we fall through and allow PHASE 2 to rerun 
-                // using the existing placeholder.
                 if (existingAi != null && (existingAi.getStatus() == MessageStatus.RETRYABLE_ERROR || existingAi.getStatus() == MessageStatus.FAILED)) {
                     log.info("Idempotency hit (RETRYABLE/FAILED -> RETRYING): session={}, key={}, status={}", 
                             id, idempotencyKey, existingAi.getStatus());
                 }
             }
 
-            // ─── PHASE 2: AI Processing (Outside lock) ───
             ChatMessage aiPlaceholder = turnResult.aiPlaceholder();
             List<ChatMessage> history = chatService.getMessages(id);
             
-            // If we have an existing AI placeholder from a previous RETRYABLE_ERROR or IN_PROGRESS,
-            // we proceed to call AI again.
             ChatGenerationResult result = aiChatService.chat(id, content, user, history);
 
-            // ─── PHASE 3: Finalize Turn ───
             ChatMessage aiMsg = chatService.finalizeTurn(
                 aiPlaceholder.getId(), 
                 result.getContent(), 
@@ -167,7 +152,6 @@ public class ChatApiController {
 
         } catch (Exception e) {
             log.error("Exception in ChatApiController.sendMessage: {}", e.getMessage(), e);
-            // Create a pseudo-message for controlled failure response
             ChatMessage errorMsg = new ChatMessage();
             errorMsg.setId(-1L);
             errorMsg.setStatus(MessageStatus.FAILED);
@@ -178,7 +162,6 @@ public class ChatApiController {
     }
 
     private ChatMessageResponse toResponse(ChatMessage aiMsg, boolean retryable) {
-        // Enforce guard for invalid completed state
         if (aiMsg.getStatus() == MessageStatus.COMPLETED && (aiMsg.getContent() == null || aiMsg.getContent().isBlank())) {
             log.error("[CRITICAL] EMPTY CONTENT WITH COMPLETED STATUS - MessageId={}", aiMsg.getId());
             aiMsg.setStatus(MessageStatus.FAILED);
@@ -213,9 +196,6 @@ public class ChatApiController {
         return ResponseEntity.noContent().build();
     }
 
-    // ============================================================
-    // Helper Methods
-    // ============================================================
     private User resolveUser(Authentication authentication) {
         if (authentication == null) return null;
         Object principal = authentication.getPrincipal();

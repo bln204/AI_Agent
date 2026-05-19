@@ -23,7 +23,6 @@ public class ChatMessage {
     @JoinColumn(name = "session_id", nullable = false)
     private ChatSession session;
 
-    // "USER" hoặc "AI"
     @Column(nullable = false, length = 10)
     private String role;
 

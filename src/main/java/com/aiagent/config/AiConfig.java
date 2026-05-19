@@ -31,21 +31,12 @@ public class AiConfig {
     @Value("${qdrant.collection-name}")
     private String collectionName;
 
-    /**
-     * ChatModel is auto-configured by
-     * spring-ai-google-ai-gemini-spring-boot-starter
-     * using properties: spring.ai.google.ai.gemini.*
-     */
-
     @Bean
     public org.springframework.boot.web.client.RestTemplateCustomizer customRestTemplateCustomizer() {
         return restTemplate -> {
             restTemplate.getMessageConverters().add(0, new org.springframework.http.converter.StringHttpMessageConverter(java.nio.charset.StandardCharsets.UTF_8));
         };
     }
-
-
-
 
     @Bean
     public CommandLineRunner initializeQdrant() {
