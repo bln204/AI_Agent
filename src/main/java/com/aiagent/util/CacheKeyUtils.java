@@ -16,14 +16,14 @@ public final class CacheKeyUtils {
             User user,
             Set<String> activeDocNames
     ) {
-        String normalizedQuery = NormalizationUtils.normalize(query);
+        String normalizedQuery = NormalizationUtils.normalizeForMatching(query);
         String userId = (user != null) ? String.valueOf(user.getId()) : "guest";
 
         String sortedDocs = "";
         if (activeDocNames != null && !activeDocNames.isEmpty()) {
             sortedDocs = activeDocNames.stream()
                     .filter(s -> s != null && !s.isBlank())
-                    .map(NormalizationUtils::normalize)
+                    .map(NormalizationUtils::normalizeForMatching)
                     .collect(Collectors.toCollection(TreeSet::new))
                     .stream()
                     .collect(Collectors.joining(","));

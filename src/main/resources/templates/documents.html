@@ -70,7 +70,10 @@
                     <tbody class="divide-y divide-slate-100">
                         <tr th:each="doc : ${documents}" class="hover:bg-slate-50/50 transition-colors group">
                             <td class="px-6 py-4">
-                                <a th:href="@{/documents/{id}(id=${doc.id})}" class="font-bold text-slate-900 hover:text-indigo-600 transition-colors block" th:text="${doc.title}">Tên tài liệu</a>
+                                <a th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or currentUser.role.code == 'MANAGER')}"
+                                   th:href="@{/documents/{id}(id=${doc.id})}" class="font-bold text-slate-900 hover:text-indigo-600 transition-colors block" th:text="${doc.title}">Tên tài liệu</a>
+                                <span th:unless="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or currentUser.role.code == 'MANAGER')}"
+                                      class="font-bold text-slate-900 block" th:text="${doc.title}">Tên tài liệu</span>
                                 <div class="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider font-semibold" th:text="${doc.fileType != null ? doc.fileType : 'Unknown'}">PDF</div>
                             </td>
                             <td class="px-6 py-4">
@@ -101,7 +104,8 @@
                             </td>
                             <td class="px-6 py-4 text-right">
                                 <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <a th:href="@{/documents/{id}(id=${doc.id})}" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Xem">
+                                    <a th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or currentUser.role.code == 'MANAGER')}"
+                                       th:href="@{/documents/{id}(id=${doc.id})}" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Xem">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                     </a>
                                     <a th:if="${doc.filePath != null}" 
@@ -111,6 +115,7 @@
                                     </a>
                                     <form th:if="${currentUser != null and (currentUser.role.code == 'DIRECTOR' or doc.uploadedBy != null and doc.uploadedBy.id == currentUser.id)}" 
                                           th:action="@{/documents/{id}/delete(id=${doc.id})}" method="post" class="inline" onsubmit="return confirm('Bạn có chắc chắn muốn xoá tài liệu này?');">
+                                        <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
                                         <button type="submit" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Xoá">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                                         </button>

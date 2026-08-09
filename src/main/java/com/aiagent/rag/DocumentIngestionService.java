@@ -74,8 +74,6 @@ public class DocumentIngestionService {
             String rawContent = documents.get(0).getContent();
             String normalizedContent = com.aiagent.util.NormalizationUtils.normalize(rawContent);
             log.info("=> Tika Extract thành công! Chiều dài: ~{} ký tự (sau chuẩn hóa NFC)", normalizedContent.length());
-            log.debug("=> Preview (first 200 chars): {}", 
-                normalizedContent.length() > 200 ? normalizedContent.substring(0, 200) : normalizedContent);
 
             try {
                 com.aiagent.model.Document dbDoc = documentRepository.findById(documentId).orElse(null);
@@ -98,7 +96,10 @@ public class DocumentIngestionService {
             log.info("=> File được cắt thành {} chunks.", splitDocuments.size());
 
             final String resolvedTitle = (title != null) ? title : actualFile.getName();
-            final String resolvedAccessLevel = (accessLevel != null) ? accessLevel : "PUBLIC";
+            // Fail-closed: nếu accessLevel bị thiếu, mặc định PRIVATE (chỉ uploader +
+            // DIRECTOR thấy được) thay vì PUBLIC (ai cũng thấy) — tránh lộ dữ liệu
+            // ngoài ý muốn nếu caller mới quên truyền accessLevel.
+            final String resolvedAccessLevel = (accessLevel != null) ? accessLevel : "PRIVATE";
             final String resolvedFileType = (fileType != null) ? fileType.toLowerCase() : "unknown";
             final List<Long> resolvedDeptIds = (departmentIds != null) ? departmentIds : List.of();
             final List<Long> resolvedProjIds = (projectIds != null) ? projectIds : List.of();
@@ -136,15 +137,28 @@ public class DocumentIngestionService {
                 metadata.put("description", description != null ? description : "");
                 metadata.put("internal_source_flag", String.valueOf(internalSourceFlag));
 
+                // Lưu TOÀN BỘ department/project được gán cho document (không chỉ phần tử
+                // đầu tiên) dưới dạng mảng — Qdrant match/in trên payload dạng mảng tự
+                // kiểm tra "chứa phần tử" nên vẫn tương thích với filter hiện có.
                 if ("DEPARTMENT".equalsIgnoreCase(resolvedAccessLevel) && !resolvedDeptIds.isEmpty()) {
-                    metadata.put("department_id", String.valueOf(resolvedDeptIds.get(0)));
+                    metadata.put("department_ids", resolvedDeptIds.stream()
+                            .map(String::valueOf).toArray(String[]::new));
                 }
 
                 if ("PROJECT".equalsIgnoreCase(resolvedAccessLevel) && !resolvedProjIds.isEmpty()) {
-                    metadata.put("project_id", String.valueOf(resolvedProjIds.get(0)));
+                    metadata.put("project_ids", resolvedProjIds.stream()
+                            .map(String::valueOf).toArray(String[]::new));
                 }
 
-                return new Document(doc.getContent(), metadata);
+                String enrichedContent = String.format("DOCUMENT: %s\nPROJECT: %s\nDESCRIPTION: %s\n\n%s", 
+                        resolvedTitle, 
+                        projectName != null ? projectName : "N/A", 
+                        description != null ? description : "", 
+                        doc.getContent());
+
+                log.info("[VERIFY-INGEST] Chunk for Doc {}: length={} chars", documentId, enrichedContent.length());
+
+                return new Document(enrichedContent, metadata);
             }).collect(Collectors.toList());
 
             log.info("[2.5/3] Kiểm tra HuggingFace Local Model vector size...");

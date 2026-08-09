@@ -209,7 +209,20 @@ html, body { height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
 .btn-logout:hover { background: rgba(239,68,68,0.15); color: #f87171; }
 
 /* ═══ MAIN CHAT ═══ */
-.chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--chat-bg); }
+.chat-main { position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--chat-bg); }
+
+/* Watermark định danh người xem (WORKING_RULES.md, Mục 10) — deterrence
+   chống screenshot, KHÔNG phải security boundary. Chỉ giúp truy vết nếu
+   nội dung bị chụp màn hình và phát tán ra ngoài. Nội dung watermark do
+   dashboard.js tạo động (username/email + thời điểm), không đổi mỗi lần
+   reload trang để không lộ pattern cố định. */
+.chat-watermark {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background-repeat: repeat;
+}
 
 /* Chat Header */
 .chat-header {
@@ -302,6 +315,19 @@ html, body { height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
 }
 .message-group.ai   .msg-bubble { background: var(--white); border: 1px solid var(--border); border-radius: 4px 16px 16px 16px; color: var(--text); }
 .message-group.user .msg-bubble { background: var(--user-bubble); color: white; border-radius: 16px 4px 16px 16px; }
+
+/* Bảo mật nội dung câu trả lời AI (WORKING_RULES.md, Mục 9) — chỉ là lớp
+   phòng vệ phía client chặn copy thông thường, KHÔNG phải security boundary. */
+.message-group.ai .msg-bubble,
+.message-group.ai .msg-bubble * {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+@media print {
+    .message-group.ai .msg-bubble { visibility: hidden; }
+}
 
 /* Typing indicator */
 .typing-indicator { display: flex; gap: 5px; padding: 14px 16px; }

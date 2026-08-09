@@ -19,12 +19,22 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DocumentService {
+
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "docx", "txt");
+
+    private static final Map<String, String> ALLOWED_MIME_TYPE_BY_EXTENSION = Map.of(
+            "pdf", "application/pdf",
+            "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "txt", "text/plain"
+    );
 
     private final DocumentRepository documentRepository;
     private final DocumentIngestionService documentIngestionService;
@@ -34,6 +44,9 @@ public class DocumentService {
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
+
+    @Value("${app.upload.max-size-mb:50}")
+    private long maxUploadSizeMb;
 
     public Page<Document> getAccessibleDocumentsPaginated(User user, String keyword, Pageable pageable) {
         String normalizedKeyword = null;
@@ -191,12 +204,59 @@ public class DocumentService {
     }
 
     private String saveFile(MultipartFile file) throws IOException {
-        Path dir = Paths.get(uploadDir);
-        Files.createDirectories(dir);
-        String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-        Path target = dir.resolve(fileName);
+        validateOriginalFilename(file.getOriginalFilename());
+
+        String extension = getExtension(file.getOriginalFilename()).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("Loại file không được hỗ trợ. Chỉ chấp nhận: " + ALLOWED_EXTENSIONS);
+        }
+
+        if (file.getSize() <= 0) {
+            throw new IllegalArgumentException("File rỗng, vui lòng chọn file khác.");
+        }
+        long maxBytes = maxUploadSizeMb * 1024 * 1024;
+        if (file.getSize() > maxBytes) {
+            throw new IllegalArgumentException("Kích thước file vượt quá giới hạn cho phép (" + maxUploadSizeMb + "MB).");
+        }
+
+        String detectedMimeType = detectContentType(file);
+        String expectedMimeType = ALLOWED_MIME_TYPE_BY_EXTENSION.get(extension);
+        if (!expectedMimeType.equals(detectedMimeType)) {
+            log.warn("[SEC-004] Rejected upload: extension='{}' expected content type='{}' but detected='{}' (declared Content-Type='{}')",
+                    extension, expectedMimeType, detectedMimeType, file.getContentType());
+            throw new IllegalArgumentException("Nội dung file không khớp với định dạng đã khai báo (." + extension + ").");
+        }
+
+        // Filename is fully server-generated (UUID + validated extension) so the
+        // client-supplied original filename can never influence the physical path.
+        Path baseDir = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Files.createDirectories(baseDir);
+
+        String serverFileName = UUID.randomUUID() + "." + extension;
+        Path target = baseDir.resolve(serverFileName).normalize();
+        if (!baseDir.equals(target.getParent())) {
+            throw new SecurityException("Đường dẫn file không hợp lệ.");
+        }
+
         Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
         return target.toString();
+    }
+
+    private void validateOriginalFilename(String originalFilename) {
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new IllegalArgumentException("Tên file không hợp lệ.");
+        }
+        String normalized = originalFilename.replace('\\', '/');
+        if (normalized.contains("/") || normalized.contains("..")) {
+            throw new IllegalArgumentException("Tên file chứa ký tự không hợp lệ.");
+        }
+    }
+
+    private String detectContentType(MultipartFile file) throws IOException {
+        org.apache.tika.Tika tika = new org.apache.tika.Tika();
+        try (java.io.InputStream in = file.getInputStream()) {
+            return tika.detect(in);
+        }
     }
 
     private String getExtension(String filename) {
@@ -215,7 +275,11 @@ public class DocumentService {
             String roleCode = requester.getRole().getCode();
             if (RoleConstants.isHighLevel(roleCode)) {
                 canDelete = true;
-            } else if (doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(requester.getId())) {
+            } else if (RoleConstants.ROLE_MANAGER.equals(roleCode)
+                    && doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(requester.getId())) {
+                // Chặn tường minh theo role thay vì chỉ dựa vào bất biến ngầm
+                // "EMPLOYEE không thể là uploader" — EMPLOYEE không được xóa
+                // document dù vô tình là owner.
                 canDelete = true;
             }
         }

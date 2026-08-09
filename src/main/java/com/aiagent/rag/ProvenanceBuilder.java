@@ -71,7 +71,14 @@ public class ProvenanceBuilder {
     private double getScore(Document doc) {
         Object score = doc.getMetadata().get("score");
         if (score == null) score = doc.getMetadata().get("distance");
-        if (score instanceof Number n) return n.doubleValue();
+        if (score instanceof Number n) {
+            double val = n.doubleValue();
+            // If it's a small value (distance), convert to similarity
+            if (doc.getMetadata().containsKey("distance") || val < 1.0) {
+                return 1.0 - val;
+            }
+            return val;
+        }
         return 0.0;
     }
 }

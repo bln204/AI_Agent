@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${document.title + ' - AI Agent'}">Tài liệu - AI Agent</title>
+    <div th:replace="~{fragments/head_links :: head_links}"></div>
+</head>
+<body>
+<div class="docs-page flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/sidebar :: sidebar('documents')}"></div>
+
+    <!-- Main -->
+    <main class="docs-main flex-1 flex flex-col bg-slate-50 overflow-hidden">
+        <div th:replace="~{fragments/header :: header('📄 Xem Tài Liệu', ${document.title})}"></div>
+
+        <div class="docs-content flex-1 overflow-y-auto p-6">
+
+            <a href="/documents" class="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 mb-6 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Quay lại danh sách tài liệu
+            </a>
+
+            <!-- Metadata card -->
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800" th:text="${document.title}">Tên tài liệu</h2>
+                        <p class="text-sm text-slate-500 mt-1" th:text="${document.classification.displayName}">Phân loại</p>
+                    </div>
+                    <span th:class="'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ' +
+                                  (${document.accessLevel.name() == 'PUBLIC'} ? 'bg-indigo-100 text-indigo-700' :
+                                  (${document.accessLevel.name() == 'PRIVATE'} ? 'bg-red-100 text-red-700' :
+                                  (${document.accessLevel.name() == 'PROJECT'} ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700')))"
+                          th:text="${document.accessLevel.name() == 'PUBLIC' ? '🌐 Công khai' :
+                                    (document.accessLevel.name() == 'PRIVATE' ? '🔒 Riêng tư' :
+                                    (document.accessLevel.name() == 'PROJECT' ? '📂 Dự án' : '🏢 Phòng ban'))}">
+                    </span>
+                </div>
+
+                <div class="flex flex-wrap gap-4 mt-4 text-sm text-slate-500">
+                    <span th:if="${document.uploadedBy != null}">Người tải lên: <b class="text-slate-700" th:text="${document.uploaderName}">—</b></span>
+                    <span th:if="${document.decisionNumber != null and !#strings.isEmpty(document.decisionNumber)}">Số quyết định: <b class="text-slate-700" th:text="${document.decisionNumber}">—</b></span>
+                    <span th:if="${document.createdAt != null}">Ngày tạo: <b class="text-slate-700" th:text="${#temporals.format(document.createdAt, 'dd/MM/yyyy HH:mm')}">—</b></span>
+                </div>
+
+                <div class="flex flex-wrap gap-1.5 mt-4" th:if="${document.accessLevel.name() == 'DEPARTMENT' and !document.departments.isEmpty()}">
+                    <span th:each="dept : ${document.departments}" class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-medium border border-emerald-100" th:text="${dept.name}">IT</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 mt-4" th:if="${document.accessLevel.name() == 'PROJECT' and !document.projects.isEmpty()}">
+                    <span th:each="proj : ${document.projects}" class="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-md text-[11px] font-medium border border-orange-100" th:text="${proj.name}">Dự án A</span>
+                </div>
+
+                <p class="text-sm text-slate-500 mt-4" th:if="${document.description != null and !#strings.isEmpty(document.description)}" th:text="${document.description}">Mô tả</p>
+
+                <div class="mt-5" th:if="${document.filePath != null}">
+                    <a th:href="@{/documents/{id}/download(id=${document.id})}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Tải xuống tệp gốc
+                    </a>
+                </div>
+            </div>
+
+            <!-- Nội dung tài liệu -->
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6" th:if="${document.content != null and !#strings.isEmpty(document.content)}">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Nội dung</h3>
+                <div class="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed" th:text="${document.content}"></div>
+            </div>
+
+        </div>
+    </main>
+</div>
+</body>
+</html>

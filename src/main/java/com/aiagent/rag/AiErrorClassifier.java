@@ -27,9 +27,12 @@ public final class AiErrorClassifier {
     }
 
     public static String getErrorCode(Throwable ex) {
-        if (isHardQuotaExceeded(ex)) return "ERR_LLM_HARD_QUOTA";
-        if (isRetryableRateLimit(ex)) return "ERR_LLM_RATE_LIMIT";
-        return "ERR_LLM_SYSTEM_FAILURE";
+        // Đồng bộ với error code mà frontend (dashboard.js#resolveErrorMessage) đã
+        // biết cách hiển thị — trước đây code trả về "ERR_LLM_*" không khớp với bất
+        // kỳ case nào ở frontend nên luôn rơi vào message chung chung mặc định.
+        if (isHardQuotaExceeded(ex)) return "AI_QUOTA_EXCEEDED";
+        if (isRetryableRateLimit(ex)) return "AI_RATE_LIMIT";
+        return "AI_SYSTEM_FAILURE";
     }
 
     private AiErrorClassifier() {}

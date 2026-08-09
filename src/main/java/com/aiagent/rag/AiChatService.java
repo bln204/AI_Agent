@@ -21,11 +21,12 @@ public class AiChatService {
 
     private final RagService ragService;
     private final com.aiagent.service.DocumentAccessService documentAccessService;
+    private final com.aiagent.rag.analyzer.QueryAnalyzer queryAnalyzer;
+    private final com.aiagent.rag.analyzer.MetadataVerificationService metadataVerificationService;
     
     public ChatGenerationResult chat(Long sessionId, String question, User user, List<ChatMessage> history) {
         String normalizedQuestion = com.aiagent.util.NormalizationUtils.normalize(question);
-        log.info("[AI-CHAT] session={}, user={}, question='{}'", 
-                sessionId, user != null ? user.getEmail() : "Guest", question);
+        log.info("[VERIFY-CHAT] session={}, questionLength={}", sessionId, question != null ? question.length() : 0);
 
         if (isGreeting(normalizedQuestion)) {
             return ChatGenerationResult.success(generateGreetingResponse(normalizedQuestion));
@@ -36,7 +37,10 @@ public class AiChatService {
 
             org.springframework.ai.vectorstore.filter.Filter.Expression filter = documentAccessService.buildVectorFilter(user);
 
-            String response = ragService.processQuery(question, user, filter, historyText);
+            java.util.Set<String> candidates = queryAnalyzer.extractCandidates(normalizedQuestion);
+            java.util.List<com.aiagent.rag.analyzer.DetectedEntity> entities = metadataVerificationService.verifyAndResolve(candidates);
+
+            String response = ragService.processQuery(normalizedQuestion, user, filter, entities, historyText);
 
             return ChatGenerationResult.success(response);
 

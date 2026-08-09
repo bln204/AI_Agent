@@ -121,18 +121,30 @@ public class DocumentController {
     }
 
     @GetMapping("/documents/{id}")
-    public String viewDocument(@PathVariable Long id, Authentication authentication, Model model) {
+    public String viewDocument(@PathVariable Long id, Authentication authentication, Model model, RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
-        Document doc = documentService.getDocument(id);
+        if (user == null) {
+            return "redirect:/login";
+        }
 
-        if (user == null || doc == null) {
-             return "redirect:/login";
+        // Chỉ Giám đốc/Trưởng phòng được dùng trang xem chi tiết (nội dung gốc đầy đủ).
+        // Nhân viên vẫn truy cập nội dung trong scope của mình qua AI chat.
+        if (!documentAccessService.canViewDocumentDetail(user)) {
+            redirectAttributes.addFlashAttribute("error", "Bạn không có quyền truy cập tài nguyên này.");
+            return "redirect:/documents";
+        }
+
+        Document doc = documentService.getDocument(id);
+        if (doc == null) {
+            redirectAttributes.addFlashAttribute("error", "Không tìm thấy tài liệu.");
+            return "redirect:/documents";
         }
 
         if (!documentAccessService.canAccessDocument(user, doc)) {
+            redirectAttributes.addFlashAttribute("error", "Bạn không có quyền truy cập tài nguyên này.");
             return "redirect:/documents";
         }
-        
+
         model.addAttribute("document", doc);
         model.addAttribute("currentUser", user);
         return "document_view";
@@ -140,10 +152,19 @@ public class DocumentController {
 
     @GetMapping("/documents/{id}/download")
     public ResponseEntity<Resource> downloadDocument(@PathVariable Long id, Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
         Document doc = documentService.getDocument(id);
 
         if (doc == null || doc.getFilePath() == null) {
             return ResponseEntity.notFound().build();
+        }
+
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
         }
 
         try {

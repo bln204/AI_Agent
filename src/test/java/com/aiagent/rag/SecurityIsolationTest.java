@@ -37,6 +37,9 @@ class SecurityIsolationTest {
     @Mock
     private HydrationService hydrationService;
 
+    @Mock
+    private com.aiagent.rag.retrieval.HybridRetrievalService hybridRetrievalService;
+
     private RagService ragService;
 
     private User userA;
@@ -44,7 +47,7 @@ class SecurityIsolationTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        ragService = new RagService(vectorStoreService, hydrationService, promptBuilder, provenanceBuilder, chatModel);
+        ragService = new RagService(vectorStoreService, hybridRetrievalService, hydrationService, promptBuilder, provenanceBuilder, chatModel);
 
         userA = new User();
         userA.setId(1L);
@@ -65,8 +68,11 @@ class SecurityIsolationTest {
         when(hydrationService.hydrateAndValidate(eq(searchResults), eq(userA))).thenReturn(searchResults);
         
         // Mock Prompt and Chat
-        when(promptBuilder.buildPrompt(anyString(), anyString(), anyString(), anyString())).thenReturn("prompt");
-        when(chatModel.call(anyString())).thenReturn("answer");
+        when(promptBuilder.buildPrompt(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(new org.springframework.ai.chat.prompt.Prompt("prompt"));
+        when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(new org.springframework.ai.chat.model.ChatResponse(
+                        List.of(new org.springframework.ai.chat.model.Generation("answer"))));
         when(provenanceBuilder.buildProvenanceData(anyList())).thenReturn(Collections.emptyList());
 
         // Execute
@@ -74,9 +80,9 @@ class SecurityIsolationTest {
         // But RagService takes the filter as an argument (in my current implementation)
         // Wait, let's look at RagService.processQuery(String question, User user, Filter.Expression filter, String historyText)
         
-        ragService.processQuery("test query", userA, mockFilter, "");
+        ragService.processQuery("test query", userA, mockFilter, Collections.emptyList(), "");
 
         // Verification
-        verify(vectorStoreService).search(eq("test query"), eq(mockFilter));
+        verify(hybridRetrievalService).search(eq("test query"), eq(mockFilter), eq(Collections.emptyList()));
     }
 }

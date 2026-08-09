@@ -19,14 +19,15 @@ import java.util.stream.Collectors;
 public class RagService {
 
     private final VectorStoreService vectorStoreService;
+    private final com.aiagent.rag.retrieval.HybridRetrievalService hybridRetrievalService;
     private final HydrationService hydrationService;
     private final PromptBuilder promptBuilder;
     private final ProvenanceBuilder provenanceBuilder;
     private final ChatModel chatModel;
 
     @Transactional(readOnly = true)
-    public String processQuery(String question, User user, Filter.Expression filter, String historyText) {
-        List<Document> rawDocuments = vectorStoreService.search(question, filter);
+    public String processQuery(String question, User user, Filter.Expression filter, List<com.aiagent.rag.analyzer.DetectedEntity> entities, String historyText) {
+        List<Document> rawDocuments = hybridRetrievalService.search(question, filter, entities);
 
         log.info("[RAG-PIPELINE] Validating {} candidates through hydration barrier...", rawDocuments.size());
         List<Document> validDocuments = hydrationService.hydrateAndValidate(rawDocuments, user);
@@ -37,7 +38,7 @@ public class RagService {
                         rawDocuments.size(), user.getEmail());
                 return "PHẦN 1:\n- summary: Không đủ quyền truy cập dữ liệu liên quan\n- details: Các tài liệu tìm thấy không nằm trong phạm vi truy cập của bạn.\n\nPHẦN 2:\n- sources: []";
             }
-            return buildFinalResponse(promptBuilder.getFallbackMessage(), "Không tìm thấy dữ liệu liên quan trong hệ thống.");
+            return promptBuilder.getFallbackMessage();
         }
         
         List<Document> highQualityDocuments = validDocuments.stream()
@@ -51,7 +52,11 @@ public class RagService {
 
         log.info("[RAG-PIPELINE] Applying Balanced Top-K Deduplication (Round-Robin) on {} quality chunks...", highQualityDocuments.size());
         Map<String, List<Document>> docsBySource = highQualityDocuments.stream()
-                .collect(Collectors.groupingBy(doc -> (String) doc.getMetadata().getOrDefault("document_id", "unknown")));
+                .collect(Collectors.groupingBy(
+                        doc -> (String) doc.getMetadata().getOrDefault("document_id", "unknown"),
+                        java.util.LinkedHashMap::new,
+                        Collectors.toList()
+                ));
 
         java.util.List<Document> deduplicatedDocs = new java.util.ArrayList<>();
         int maxChunksPerDoc = 3;
@@ -74,20 +79,22 @@ public class RagService {
         String context = deduplicatedDocs.stream()
                 .map(Document::getContent)
                 .collect(Collectors.joining("\n\n---\n\n"));
-        log.info("[RAG-CONTEXT] Final context string (length: {} chars):\n{}", context.length(), context);
+        log.info("[RAG-CONTEXT] Final context string length: {} chars", context.length());
         List<ProvenanceBuilder.SourceMetadata> sources = provenanceBuilder.buildProvenanceData(deduplicatedDocs);
         String provenanceString = formatProvenance(sources);
 
         log.info("[RAG-PIPELINE] Calling LLM with {} validated chunks (deduplicated)...", deduplicatedDocs.size());
-        String prompt = promptBuilder.buildPrompt(question, context, historyText, provenanceString);
-        
+        org.springframework.ai.chat.prompt.Prompt prompt = promptBuilder.buildPrompt(question, context, historyText, provenanceString);
+        log.info("[VERIFY-PROMPT] Final prompt size: {} characters", prompt.getContents().length());
+
         try {
-            String aiAnswer = chatModel.call(prompt);
+            String aiAnswer = chatModel.call(prompt).getResult().getOutput().getContent();
             if (aiAnswer != null && !aiAnswer.trim().isEmpty()) {
                 logFinalMetrics(deduplicatedDocs, context.length(), true);
                 return aiAnswer.trim();
             }
         } catch (Exception e) {
+            log.error("[RAG-PIPELINE] LLM call failed: {}", e.getMessage(), e);
         }
 
         log.warn("[RAG-FAILSAFE] LLM unavailable, returning safe fallback response");

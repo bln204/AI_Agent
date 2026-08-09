@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GoogleLoginRequest {
-          private String email;
-          private String googleId;
+          // ID token do Google Identity Services phát hành phía client.
+          // Backend PHẢI tự verify token này với Google trước khi tin bất kỳ claim nào
+          // (email, sub/googleId) — không được nhận email/googleId trực tiếp từ client.
+          private String idToken;
 }

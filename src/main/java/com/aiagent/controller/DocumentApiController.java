@@ -4,8 +4,13 @@ import com.aiagent.model.Document;
 import com.aiagent.model.DocumentClassification;
 import com.aiagent.model.User;
 import com.aiagent.repository.UserRepository;
+import com.aiagent.service.DocumentAccessService;
 import com.aiagent.service.DocumentService;
+import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,9 +24,11 @@ import java.util.List;
 @RestController
 @RequestMapping(value = "/api/documents", produces = "application/json;charset=UTF-8")
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentApiController {
 
     private final DocumentService documentService;
+    private final DocumentAccessService documentAccessService;
     private final UserRepository userRepository;
     private final com.aiagent.repository.DocumentRepository documentRepository;
 
@@ -49,29 +56,53 @@ public class DocumentApiController {
                     decisionNumber, classification, projectName, description, internalSource, file, user);
             return ResponseEntity.ok(doc);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            log.error("Document upload failed for user {}", user.getEmail(), e);
+            return ResponseEntity.badRequest().body("Không thể tải tài liệu lên. Vui lòng kiểm tra lại tệp.");
         }
     }
 
     @GetMapping
-    public ResponseEntity<List<Document>> getAllDocuments() {
-        return ResponseEntity.ok(documentRepository.findAll());
+    public ResponseEntity<List<Document>> getAllDocuments(Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        List<Document> accessible = documentService
+                .getAccessibleDocumentsPaginated(user, null, Pageable.unpaged())
+                .getContent();
+        return ResponseEntity.ok(accessible);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Document> getDocument(@PathVariable Long id) {
-        return ResponseEntity.ok(documentService.getDocument(id));
+    public ResponseEntity<Document> getDocument(@PathVariable Long id, Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        Document doc = documentService.getDocument(id);
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(doc);
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<Document>> searchDocuments(@RequestParam("keyword") String keyword) {
-        return ResponseEntity.ok(documentRepository.findByNormalizedTitleContaining(keyword));
+    public ResponseEntity<List<Document>> searchDocuments(@RequestParam("keyword") String keyword, Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        String roleCode = user.getRole() != null ? user.getRole().getCode() : RoleConstants.ROLE_GUEST;
+        Long departmentId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+        List<Document> results = documentRepository.findCandidateDocuments(keyword, roleCode, user.getId(), departmentId);
+        return ResponseEntity.ok(results);
     }
 
     @GetMapping("/decision/{smecode}")
-    public ResponseEntity<Document> getByDecisionNumber(@PathVariable String smecode) {
+    public ResponseEntity<Document> getByDecisionNumber(@PathVariable String smecode, Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         return documentRepository.findByDecisionNumber(smecode)
-                .map(ResponseEntity::ok)
+                .map(doc -> {
+                    if (!documentAccessService.canAccessDocument(user, doc)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).<Document>build();
+                    }
+                    return ResponseEntity.ok(doc);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 

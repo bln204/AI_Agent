@@ -21,18 +21,22 @@ public class VectorStoreService {
     @Value("${app.rag.similarity-threshold:0.3}")
     private double defaultThreshold;
 
-    @Value("${app.rag.top-k:10}")
+    @Value("${app.rag.semantic-top-k:10}")
     private int topK;
 
     public List<Document> search(String query, Filter.Expression filterExpression) {
-        log.info("[VECTOR-SEARCH] Initializing search for query: '{}', threshold: {}", query, defaultThreshold);
+        log.info("[VERIFY-SEARCH] QueryLength: {} chars | TopK: {} | Threshold: {}", query.length(), topK, defaultThreshold);
 
         SearchRequest request = SearchRequest.query(query)
                 .withTopK(topK)
                 .withSimilarityThreshold(defaultThreshold)
                 .withFilterExpression(filterExpression);
 
+        long startTime = System.currentTimeMillis();
         List<Document> results = vectorStore.similaritySearch(request);
+        long duration = System.currentTimeMillis() - startTime;
+
+        log.info("[VECTOR-STORE] Search completed in {}ms. Found {} candidates.", duration, results.size());
 
         if (results.isEmpty()) {
             log.warn("[VECTOR-SEARCH] No documents found above threshold {}", defaultThreshold);
@@ -49,8 +53,8 @@ public class VectorStoreService {
                 String docId = (String) doc.getMetadata().getOrDefault("document_id", "null");
                 String source = (String) doc.getMetadata().getOrDefault("source", "unknown");
 
-                log.info("[VECTOR-SEARCH] Result #{} | Similarity: {} | RawDist: {} | DocID: {} | Source: '{}'",
-                        i + 1, String.format("%.4f", similarity), String.format("%.4f", rawScore), docId, source);
+                log.info("[VERIFY-RESULT] Rank: #{} | Score: {} | DocID: {} | ContentLength: {} chars",
+                        i + 1, String.format("%.4f", similarity), docId, doc.getContent().length());
             }
         }
 

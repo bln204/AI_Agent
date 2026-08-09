@@ -114,7 +114,12 @@ public class ProjectController {
 
         Project project = projectService.getProjectById(id)
                 .orElseThrow(() -> new RuntimeException("Dự án không tồn tại"));
-        
+
+        if (!documentAccessService.canAccessProject(user, project)) {
+            redirectAttributes.addFlashAttribute("error", "Bạn không có quyền truy cập dự án này.");
+            return "redirect:/projects";
+        }
+
         model.addAttribute("project", project);
         model.addAttribute("members", projectService.getProjectMembers(project));
         model.addAttribute("allUsers", userRepository.findAll()); // Simple list for adding members

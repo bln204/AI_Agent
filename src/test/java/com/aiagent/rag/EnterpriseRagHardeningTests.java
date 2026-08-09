@@ -8,14 +8,24 @@ import com.aiagent.util.CacheKeyUtils;
 import com.aiagent.util.RoleConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Only exercises CacheKeyUtils, a pure utility — never touches RAG retrieval —
+ * so the real ONNX embedding model is replaced with a Mockito mock via
+ * {@code @MockBean} to avoid the memory-heavy native load. {@code @MockBean}
+ * (unlike a plain {@code @Primary @Bean}) is guaranteed to replace the
+ * bean definition before it's ever instantiated, regardless of
+ * configuration-class processing order.
+ */
 @SpringBootTest
 @TestPropertySource(properties = {
         "app.rag.max-context-chars=500",
@@ -23,6 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         "app.rag.top-k=10"
 })
 public class EnterpriseRagHardeningTests {
+
+    @MockBean(name = "embeddingModel")
+    private EmbeddingModel embeddingModel;
 
     @Autowired
     private UserRepository userRepository;

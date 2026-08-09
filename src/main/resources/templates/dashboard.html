@@ -14,6 +14,9 @@
 
     <!-- Main Chat Area -->
     <main class="chat-main">
+        <!-- Watermark định danh người xem — chống screenshot (WORKING_RULES.md, Mục 10) -->
+        <div id="chatWatermark" class="chat-watermark" aria-hidden="true"></div>
+
         <!-- Header -->
         <div class="chat-header">
             <button class="btn-toggle-sidebar" id="toggleSidebar">
@@ -56,7 +59,7 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
             </div>
-            <div class="input-footer">AI Agent có thể mắc lỗi. Vui lòng kiểm tra thông tin quan trọng.</div>
+            <div class="input-footer">AI Agent có thể mắc lỗi. Vui lòng kiểm tra thông tin quan trọng. Nội dung câu trả lời được bảo vệ, không được sao chép ra ngoài hệ thống.</div>
         </div>
     </main>
 

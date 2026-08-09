@@ -78,7 +78,7 @@ public class RagGroundingStabilizationTest {
 
         // 3. Process Query
         String question = "du an " + mainDocName + " co thong tin gi";
-        String response = ragService.processQuery(question, testUser, null, "");
+        String response = ragService.processQuery(question, testUser, null, Collections.emptyList(), "");
 
         // 4. Verification
         assertThat(response).contains("PHẦN 1:");

@@ -125,6 +125,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findByProjectId(@Param("projectId") Long projectId);
 
     java.util.Optional<Document> findByDecisionNumber(String decisionNumber);
+    boolean existsByDecisionNumber(String decisionNumber);
+    boolean existsByTitle(String title);
 
     java.util.Optional<Document> findByDocumentUuid(String documentUuid);
     

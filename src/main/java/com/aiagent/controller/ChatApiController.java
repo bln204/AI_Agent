@@ -55,8 +55,10 @@ public class ChatApiController {
     public ResponseEntity<List<ChatMessageDto>> getMessages(@PathVariable Long id, Authentication authentication) {
         User user = resolveUser(authentication);
         if (user == null) return ResponseEntity.status(401).build();
-        ChatSession session = chatService.getSession(id);
-        if (session == null || !session.getUser().getId().equals(user.getId())) return ResponseEntity.status(403).build();
+        java.util.Optional<ChatSession> sessionOpt = chatService.findSession(id);
+        if (sessionOpt.isEmpty()) return ResponseEntity.status(404).build();
+        ChatSession session = sessionOpt.get();
+        if (!session.getUser().getId().equals(user.getId())) return ResponseEntity.status(403).build();
         
         List<ChatMessageDto> dtos = chatService.getMessages(id).stream()
             .map(m -> new ChatMessageDto(
@@ -86,8 +88,7 @@ public class ChatApiController {
             String content = body.getOrDefault("content", "").trim();
             if (content.isEmpty()) return ResponseEntity.badRequest().build();
 
-            log.info("[CHAT] Received query for session {}: '{}' (normalized: '{}')", 
-                    id, content, com.aiagent.util.NormalizationUtils.normalize(content));
+            log.info("[CHAT] Received query for session {}: length={} chars", id, content.length());
 
             String idempotencyKey = body.get("idempotencyKey");
             if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -190,8 +191,9 @@ public class ChatApiController {
     public ResponseEntity<Void> deleteSession(@PathVariable Long id, Authentication authentication) {
         User user = resolveUser(authentication);
         if (user == null) return ResponseEntity.status(401).build();
-        ChatSession session = chatService.getSession(id);
-        if (!session.getUser().getId().equals(user.getId())) return ResponseEntity.status(403).build();
+        java.util.Optional<ChatSession> sessionOpt = chatService.findSession(id);
+        if (sessionOpt.isEmpty()) return ResponseEntity.status(404).build();
+        if (!sessionOpt.get().getUser().getId().equals(user.getId())) return ResponseEntity.status(403).build();
         chatService.deleteSession(id);
         return ResponseEntity.noContent().build();
     }

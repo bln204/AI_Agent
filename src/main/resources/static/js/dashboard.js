@@ -5,11 +5,85 @@
 let currentSessionId = null;
 let isTyping = false;
 
+// ═══ CSRF ═══
+// Spring Security issues the token via the XSRF-TOKEN cookie (CookieCsrfTokenRepository);
+// state-changing requests (POST/PUT/DELETE) must echo it back as X-XSRF-TOKEN.
+function getCsrfToken() {
+    const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+function csrfHeaders(extra) {
+    const headers = Object.assign({}, extra);
+    const token = getCsrfToken();
+    if (token) headers['X-XSRF-TOKEN'] = token;
+    return headers;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadChatSessions();
     setupEventListeners();
+    setupContentProtection();
+    setupWatermark();
     autoResizeTextarea();
 });
+
+// ═══ Watermark định danh người xem (WORKING_RULES.md, Mục 10) ═══
+// Không chặn được screenshot (không khả thi và không nên tuyên bố là chặn
+// được), nhưng dán watermark username/email + thời điểm lên toàn bộ khu
+// vực chat để nếu nội dung bị chụp màn hình và phát tán, vẫn truy vết được
+// người xem. Đây là deterrence, không phải security boundary.
+function setupWatermark() {
+    const el = document.getElementById('chatWatermark');
+    if (!el || !CURRENT_USER) return;
+
+    const identity = CURRENT_USER.email || CURRENT_USER.username || 'user';
+    const render = () => {
+        const timestamp = new Date().toLocaleString('vi-VN');
+        el.style.backgroundImage = buildWatermarkPattern(`${identity} • ${timestamp}`);
+    };
+    render();
+    setInterval(render, 60000);
+}
+
+function buildWatermarkPattern(text) {
+    const safeText = escapeHtml(text);
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="280" height="160">'
+        + '<text x="0" y="90" transform="rotate(-30 140 80)" font-family="Inter, sans-serif" '
+        + 'font-size="13" fill="rgba(15,23,42,0.08)">' + safeText + '</text></svg>';
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+// ═══ Bảo mật nội dung câu trả lời AI (WORKING_RULES.md, Mục 9) ═══
+// Nhân viên có thể được RAG trả lời dựa trên tài liệu nội bộ mà họ có quyền
+// xem trong hệ thống, nhưng không được phép copy câu trả lời đó ra ngoài
+// bằng các thao tác thông thường trên UI. Đây CHỈ là lớp phòng vệ phía
+// client (chặn Ctrl+C, chuột phải, kéo-chọn) — KHÔNG chống được DevTools,
+// extension, chụp màn hình OS hay gọi API trực tiếp. Security boundary
+// thật sự vẫn là RBAC + Document Access Control + RAG permission filter
+// ở backend, không đổi.
+function setupContentProtection() {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+
+    const isAiBubble = (target) => target.closest && target.closest('.message-group.ai .msg-bubble');
+
+    container.addEventListener('contextmenu', (e) => { if (isAiBubble(e.target)) e.preventDefault(); });
+    container.addEventListener('selectstart', (e) => { if (isAiBubble(e.target)) e.preventDefault(); });
+    container.addEventListener('dragstart', (e) => { if (isAiBubble(e.target)) e.preventDefault(); });
+    container.addEventListener('copy', (e) => { if (isAiBubble(e.target)) e.preventDefault(); });
+    container.addEventListener('cut', (e) => { if (isAiBubble(e.target)) e.preventDefault(); });
+
+    // Chặn phím tắt copy/in/lưu khi người dùng không đang gõ trong ô nhập
+    // liệu (tránh chặn nhầm khi họ soạn/copy tin nhắn của chính mình).
+    document.addEventListener('keydown', (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        if (document.activeElement === document.getElementById('messageInput')) return;
+        if (['c', 'x', 'a', 's', 'p'].includes(e.key.toLowerCase())) {
+            e.preventDefault();
+        }
+    });
+}
 
 // ═══ Setup ═══
 function setupEventListeners() {
@@ -110,9 +184,12 @@ async function startNewChat() {
     try {
         const res = await fetch('/api/chat/sessions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+            headers: csrfHeaders({ 'Content-Type': 'application/json; charset=UTF-8' }),
             body: JSON.stringify({ title: 'Cuộc trò chuyện mới' })
         });
+        if (!res.ok) {
+            throw new Error(`Tạo cuộc trò chuyện thất bại (HTTP ${res.status})`);
+        }
         const session = await res.json();
         currentSessionId = session.id;
 
@@ -130,6 +207,7 @@ async function startNewChat() {
         document.getElementById('messageInput')?.focus();
     } catch (e) {
         console.error('Lỗi tạo session:', e);
+        throw e; // để sendMessage() biết tạo session thất bại, không tiếp tục gửi với id rỗng
     }
 }
 
@@ -157,6 +235,7 @@ async function sendMessage() {
             await startNewChat();
         } catch (e) {
             console.error('Lỗi tạo session:', e);
+            appendMessageBubble('AI', '❌ Không thể tạo cuộc trò chuyện mới. Vui lòng thử lại.');
             isTyping = false;
             if (sendBtn) sendBtn.disabled = false;
             if (input) input.disabled = false;
@@ -180,13 +259,28 @@ async function sendMessage() {
     try {
         const res = await fetch(`/api/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+            headers: csrfHeaders({ 'Content-Type': 'application/json; charset=UTF-8' }),
             body: JSON.stringify({ content, idempotencyKey })
         });
         
         if (res.status === 409) {
             removeTyping();
             appendMessageBubble('AI', '⚠️ Hệ thống đang xử lý một câu hỏi khác trong cuộc trò chuyện này. Vui lòng đợi.');
+            return;
+        }
+
+        // 401/403 được trả bởi security layer (session hết hạn / không đủ quyền)
+        // TRƯỚC KHI request tới được ChatApiController, nên KHÔNG theo contract
+        // ChatMessageResponse{status,...} — phải xử lý riêng, không để rơi vào
+        // nhánh "Phản hồi không hợp lệ" gây khó hiểu cho user.
+        if (res.status === 401) {
+            removeTyping();
+            appendMessageBubble('AI', '⚠️ Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+            return;
+        }
+        if (res.status === 403) {
+            removeTyping();
+            appendMessageBubble('AI', '⚠️ Bạn không có quyền truy cập tài nguyên này.');
             return;
         }
 
@@ -249,7 +343,7 @@ async function deleteSession(event, sessionId) {
     if (!confirm('Xóa cuộc trò chuyện này?')) return;
 
     try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE', headers: csrfHeaders() });
         
         if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));

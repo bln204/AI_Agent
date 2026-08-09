@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,8 +27,11 @@ public class MaintenanceController {
 
     @PostMapping("/reindex")
     @PreAuthorize("hasRole('DIRECTOR')")
-    public ResponseEntity<String> reindexAll(@RequestParam(required = false, defaultValue = "company_documents") String collectionName) {
-        log.info("[MAINTENANCE] Starting global re-index into collection: '{}'...", collectionName);
+    public ResponseEntity<String> reindexAll(
+            @RequestParam(required = false, defaultValue = "company_documents") String collectionName,
+            Authentication authentication) {
+        log.info("[MAINTENANCE] Re-index into collection '{}' triggered by: {}",
+                collectionName, authentication != null ? authentication.getName() : "UNKNOWN");
         
         List<Document> documents = documentRepository.findAll();
         log.info("[MAINTENANCE] Found {} documents to re-index.", documents.size());

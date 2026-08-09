@@ -49,7 +49,7 @@ public class HydrationService {
                 .collect(Collectors.toList());
     }
 
-    public enum Status { VALID, STALE, PARTIAL, ORPHAN }
+    public enum Status { VALID, STALE, ORPHAN }
     public record ValidatedChunk(org.springframework.ai.document.Document chunk, Status status) {}
 
     private ValidatedChunk validateChunk(org.springframework.ai.document.Document chunk, Map<Long, Document> snapshot, User user) {

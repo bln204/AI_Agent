@@ -48,6 +48,11 @@ public class ChatService {
                 .orElseThrow(() -> new RuntimeException("Session không tồn tại: " + sessionId));
     }
 
+    /** Biến thể không throw, dùng ở nơi cần phân biệt rõ 404 (không tồn tại) với lỗi khác. */
+    public Optional<ChatSession> findSession(Long sessionId) {
+        return sessionRepository.findById(sessionId);
+    }
+
     public List<ChatMessage> getMessages(Long sessionId) {
         return messageRepository.findBySessionIdOrderBySequenceNumberAsc(sessionId);
     }

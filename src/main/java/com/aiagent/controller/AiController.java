@@ -51,7 +51,7 @@ public class AiController {
             return ResponseEntity.ok("Document ingested successfully: " + file.getOriginalFilename());
         } catch (Exception e) {
             log.error("Error ingesting document", e);
-            return ResponseEntity.internalServerError().body("Error ingesting document: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Không thể tải tài liệu lên. Vui lòng kiểm tra lại tệp.");
         }
     }
 
@@ -67,7 +67,8 @@ public class AiController {
             return ResponseEntity.ok(new ChatResponse(result.getContent()));
         } catch (Exception e) {
             log.error("Error during AI chat", e);
-            return ResponseEntity.internalServerError().body(new ChatResponse("Error: " + e.getMessage()));
+            return ResponseEntity.internalServerError()
+                    .body(new ChatResponse("Hệ thống gặp lỗi khi xử lý yêu cầu. Vui lòng thử lại sau."));
         }
     }
 

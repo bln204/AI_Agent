@@ -30,6 +30,7 @@
                 <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canManageMembers}">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Thêm thành viên mới</h3>
                     <form th:action="@{/projects/{id}/members/add(id=${project.id})}" method="post" class="flex gap-3">
+                        <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
                         <select name="userId" class="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium" required>
                             <option value="">Chọn người dùng để thêm...</option>
                             <option th:each="user : ${allUsers}" 
@@ -60,6 +61,7 @@
                             </div>
                             <div th:if="${canManageMembers}" class="opacity-0 group-hover:opacity-100 transition-opacity">
                                 <form th:action="@{/projects/{id}/members/remove(id=${project.id})}" method="post" onsubmit="return confirm('Loại bỏ thành viên này khỏi dự án?')" class="m-0">
+                                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
                                     <input type="hidden" name="userId" th:value="${member.user.id}">
                                     <button type="submit" class="px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg text-xs font-bold transition-all border border-transparent hover:border-red-100">Gỡ bỏ</button>
                                 </form>

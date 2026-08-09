@@ -1,17 +1,82 @@
 package com.aiagent.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.FlashMap;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.servlet.support.RequestContextUtils;
 
+import java.net.URI;
 import java.util.Map;
 
 @RestControllerAdvice
 @Slf4j
 public class AiGlobalExceptionHandler {
+
+    @Value("${app.upload.max-size-mb:200}")
+    private long maxUploadSizeMb;
+
+    // Request quá lớn bị Tomcat/Spring từ chối trước khi tới được controller
+    // (thường xảy ra trong CsrfFilter khi đọc multipart parameter), rồi bị forward
+    // sang /error và ném lại lần 2 trong lúc dispatch — nên bắt riêng ở đây thay vì
+    // rơi vào handler Exception.class chung (sẽ log nhầm thành lỗi hệ thống 500).
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<?> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e,
+            HttpServletRequest request, HttpServletResponse response) {
+        String message = "Tệp tải lên vượt quá dung lượng cho phép (tối đa " + maxUploadSizeMb + "MB).";
+        log.warn("Upload rejected - file exceeds max size ({}MB): {}", maxUploadSizeMb, request.getRequestURI());
+
+        if (isApiRequest(request)) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of(
+                    "error", "DOCUMENT_TOO_LARGE",
+                    "message", message
+                ));
+        }
+
+        // Luồng upload qua form HTML (DocumentController) mong đợi redirect kèm
+        // flash message, giống hệt cách các catch-block khác trong controller đó
+        // báo lỗi — dùng chung cơ chế FlashMap/attribute "error" để không cần sửa template.
+        FlashMap flashMap = RequestContextUtils.getOutputFlashMap(request);
+        flashMap.put("error", message);
+        RequestContextUtils.saveOutputFlashMap("/documents", request, response);
+
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create("/documents"))
+                .build();
+    }
+
+    private boolean isApiRequest(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.startsWith("/api/") || uri.startsWith("/ai/");
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(Map.of(
+                "error", "ACCESS_DENIED",
+                "message", "Bạn không có quyền thực hiện thao tác này."
+            ));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoResourceFound(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(Map.of(
+                "error", "NOT_FOUND",
+                "message", "Không tìm thấy tài nguyên yêu cầu."
+            ));
+    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception e) {
