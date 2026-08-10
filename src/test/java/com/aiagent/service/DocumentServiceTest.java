@@ -43,13 +43,16 @@ class DocumentServiceTest {
     @Mock
     private com.aiagent.service.DecisionNumberService decisionNumberService;
 
+    @Mock
+    private com.aiagent.service.DocumentViewerConversionService documentViewerConversionService;
+
     private DocumentService documentService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy, decisionNumber
-        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, documentAccessService, decisionNumberService);
+        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy, viewerConversion, decisionNumber
+        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService);
         
         // Fix @Value field
         ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");

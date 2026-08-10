@@ -35,6 +35,13 @@ public class Document {
     @Column(length = 50)
     private String fileType;
 
+    // Đường dẫn tới bản PDF phục vụ Document Viewer — tách biệt với filePath
+    // (RagReindexService/DocumentIngestionService luôn phải đọc filePath là file
+    // gốc). PDF: bằng filePath luôn (không convert). DOCX: null cho tới khi
+    // LibreOffice convert xong. TXT/khác: luôn null (viewer không áp dụng).
+    @Column(name = "viewer_file_path", length = 500)
+    private String viewerFilePath;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "document_departments",

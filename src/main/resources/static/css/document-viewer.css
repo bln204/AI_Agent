@@ -1,0 +1,53 @@
+#pdf-viewer {
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 16px;
+    background: #f8fafc;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+#pdf-viewer .pdf-viewer-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+}
+
+#pdf-viewer .pdf-viewer-toolbar button {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e2e8f0);
+    background: #ffffff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+#pdf-viewer .pdf-viewer-toolbar button:hover {
+    background: #f1f5f9;
+}
+
+#pdf-viewer-page-info {
+    font-size: 0.85rem;
+    color: #475569;
+    min-width: 110px;
+    text-align: center;
+}
+
+#pdf-viewer-status {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+#pdf-viewer-canvas {
+    max-width: 100%;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    /* Ngăn thao tác kéo/lưu ảnh canvas thông thường qua drag; chỉ là lớp
+       phòng vệ UI, không thay thế RBAC/backend. */
+    user-select: none;
+}

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${document.title + ' - AI Agent'}">Tài liệu - AI Agent</title>
     <div th:replace="~{fragments/head_links :: head_links}"></div>
+    <link rel="stylesheet" href="/css/document-viewer.css">
 </head>
 <body>
 <div class="docs-page flex h-screen overflow-hidden">
@@ -63,6 +64,26 @@
                 </div>
             </div>
 
+            <!-- Document Viewer (PDF.js) -->
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6" th:if="${document.viewerFilePath != null}">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Xem trực tuyến</h3>
+                <div id="pdf-viewer" th:attr="data-document-id=${document.id}">
+                    <div class="pdf-viewer-toolbar">
+                        <button type="button" id="pdf-viewer-prev">‹ Trang trước</button>
+                        <span id="pdf-viewer-page-info">Đang tải...</span>
+                        <button type="button" id="pdf-viewer-next">Trang sau ›</button>
+                        <button type="button" id="pdf-viewer-zoom-out">−</button>
+                        <button type="button" id="pdf-viewer-zoom-in">+</button>
+                    </div>
+                    <span id="pdf-viewer-status"></span>
+                    <canvas id="pdf-viewer-canvas"></canvas>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
+                 th:if="${document.viewerFilePath == null and document.fileType == 'DOCX'}">
+                Đang xử lý bản xem trực tuyến, vui lòng thử lại sau.
+            </div>
+
             <!-- Nội dung tài liệu -->
             <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6" th:if="${document.content != null and !#strings.isEmpty(document.content)}">
                 <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Nội dung</h3>
@@ -72,5 +93,7 @@
         </div>
     </main>
 </div>
+<script src="/vendor/pdfjs/pdf.min.js" th:if="${document.viewerFilePath != null}"></script>
+<script src="/js/document-viewer.js" th:if="${document.viewerFilePath != null}"></script>
 </body>
 </html>

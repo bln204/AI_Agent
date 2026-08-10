@@ -1,0 +1,7 @@
+pdf.js v3.11.174 (Apache License 2.0)
+https://github.com/mozilla/pdf.js
+
+Vendored locally for the internal Document Viewer feature so document
+content never leaves this server via a third-party CDN. Files:
+- pdf.min.js
+- pdf.worker.min.js

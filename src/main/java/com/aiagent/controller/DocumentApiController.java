@@ -9,8 +9,11 @@ import com.aiagent.service.DocumentService;
 import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -18,6 +21,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Paths;
 import java.util.List;
 
 
@@ -80,6 +84,38 @@ public class DocumentApiController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return ResponseEntity.ok(doc);
+    }
+
+    @GetMapping(value = "/{id}/viewer", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<Resource> getDocumentViewer(@PathVariable Long id, Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        Document doc;
+        try {
+            doc = documentService.getDocument(id);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        String viewerPath = doc.getViewerFilePath();
+        if (viewerPath == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        try {
+            Resource resource = new UrlResource(Paths.get(viewerPath).normalize().toUri());
+            if (!resource.exists() || !resource.isReadable()) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/search")
