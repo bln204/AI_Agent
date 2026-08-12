@@ -65,7 +65,7 @@ Mở file .env và điền:
 # ========================
 DB_URL=jdbc:mysql://localhost:3306/ai_agent?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
 DB_USERNAME=root
-DB_PASSWORD=123456
+DB_PASSWORD=1234
 
 # ========================
 # Google OAuth

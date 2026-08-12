@@ -65,7 +65,7 @@
             </div>
 
             <!-- Document Viewer (PDF.js) -->
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6" th:if="${document.viewerFilePath != null}">
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6" th:if="${document.viewerStatus.name() == 'READY'}">
                 <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Xem trực tuyến</h3>
                 <div id="pdf-viewer" th:attr="data-document-id=${document.id}">
                     <div class="pdf-viewer-toolbar">
@@ -80,8 +80,18 @@
                 </div>
             </div>
             <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
-                 th:if="${document.viewerFilePath == null and document.fileType == 'DOCX'}">
-                Đang xử lý bản xem trực tuyến, vui lòng thử lại sau.
+                 id="viewer-pending-block"
+                 th:if="${document.viewerStatus.name() == 'PENDING' or document.viewerStatus.name() == 'PROCESSING'}"
+                 th:attr="data-document-id=${document.id}">
+                Tài liệu đang được chuẩn bị để xem trực tuyến...
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
+                 th:if="${document.viewerStatus.name() == 'FAILED'}">
+                Không thể tạo bản xem trước tài liệu.
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
+                 th:if="${document.viewerStatus.name() == 'UNSUPPORTED'}">
+                Định dạng này chưa hỗ trợ xem trực tiếp.
             </div>
 
             <!-- Nội dung tài liệu -->
@@ -93,7 +103,9 @@
         </div>
     </main>
 </div>
-<script src="/vendor/pdfjs/pdf.min.js" th:if="${document.viewerFilePath != null}"></script>
-<script src="/js/document-viewer.js" th:if="${document.viewerFilePath != null}"></script>
+<script src="/vendor/pdfjs/pdf.min.js" th:if="${document.viewerStatus.name() == 'READY'}"></script>
+<script src="/js/document-viewer.js" th:if="${document.viewerStatus.name() == 'READY'}"></script>
+<script src="/js/document-viewer-status.js"
+        th:if="${document.viewerStatus.name() == 'PENDING' or document.viewerStatus.name() == 'PROCESSING'}"></script>
 </body>
 </html>

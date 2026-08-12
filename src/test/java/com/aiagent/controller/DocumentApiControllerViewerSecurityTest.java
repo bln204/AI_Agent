@@ -6,6 +6,7 @@ import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
 import com.aiagent.model.Role;
 import com.aiagent.model.User;
+import com.aiagent.model.ViewerStatus;
 import com.aiagent.repository.DocumentRepository;
 import com.aiagent.repository.UserRepository;
 import com.aiagent.service.CustomOAuth2UserService;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -139,5 +141,52 @@ class DocumentApiControllerViewerSecurityTest {
                 // ";charset=UTF-8" to every response, so compare compatibility
                 // rather than an exact literal match.
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF));
+    }
+
+    // GET /api/documents/{id}/viewer-status must follow the exact same
+    // authenticate -> authorize -> exists checklist as /viewer above, since
+    // it's just a lightweight status probe backing the frontend's bounded
+    // polling and must not become a document-metadata IDOR side-channel.
+
+    @Test
+    void viewerStatus_anonymous_isUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/documents/42/viewer-status"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(username = "employee@company.com")
+    void viewerStatus_unauthorizedForThisDocument_isForbidden() throws Exception {
+        when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
+        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther("does-not-matter.pdf"));
+        when(documentAccessService.canAccessDocument(any(), any())).thenReturn(false);
+
+        mockMvc.perform(get("/api/documents/42/viewer-status"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "employee@company.com")
+    void viewerStatus_documentNotFound_isNotFound() throws Exception {
+        when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
+        when(documentService.getDocument(42L)).thenThrow(new RuntimeException("Tài liệu không tồn tại"));
+
+        mockMvc.perform(get("/api/documents/42/viewer-status"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(username = "employee@company.com")
+    void viewerStatus_authorized_returnsCurrentStatus() throws Exception {
+        Document doc = privateDocOwnedByOther(null);
+        doc.setViewerStatus(ViewerStatus.PROCESSING);
+
+        when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
+        when(documentService.getDocument(42L)).thenReturn(doc);
+        when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
+
+        mockMvc.perform(get("/api/documents/42/viewer-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PROCESSING"));
     }
 }

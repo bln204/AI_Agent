@@ -118,6 +118,25 @@ public class DocumentApiController {
         }
     }
 
+    @GetMapping("/{id}/viewer-status")
+    public ResponseEntity<java.util.Map<String, String>> getViewerStatus(@PathVariable Long id, Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        Document doc;
+        try {
+            doc = documentService.getDocument(id);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(java.util.Map.of("status", doc.getViewerStatus().name()));
+    }
+
     @GetMapping("/search")
     public ResponseEntity<List<Document>> searchDocuments(@RequestParam("keyword") String keyword, Authentication authentication) {
         User user = resolveUser(authentication);

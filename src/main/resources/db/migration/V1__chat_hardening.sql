@@ -7,13 +7,16 @@
 -- ============================================================
 
 -- ─── PHASE 1: Add Columns ───────────────────────────────────
+-- Note: plain ADD COLUMN / CREATE INDEX (no IF NOT EXISTS) — this MySQL
+-- server rejects "ADD COLUMN IF NOT EXISTS" / "CREATE INDEX IF NOT EXISTS"
+-- as a syntax error, so these migrations are only safe to run once.
 -- ChatSession: sequence counter
-ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS last_sequence_number BIGINT DEFAULT 0;
+ALTER TABLE chat_sessions ADD COLUMN last_sequence_number BIGINT DEFAULT 0;
 
 -- ChatMessage: idempotency, status, ordering
-ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(128);
-ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'COMPLETED';
-ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sequence_number BIGINT;
+ALTER TABLE chat_messages ADD COLUMN idempotency_key VARCHAR(128);
+ALTER TABLE chat_messages ADD COLUMN status VARCHAR(20) DEFAULT 'COMPLETED';
+ALTER TABLE chat_messages ADD COLUMN sequence_number BIGINT;
 
 -- ─── PHASE 2: Backfill Existing Data ────────────────────────
 -- Give each existing message a unique generated idempotency key
@@ -43,15 +46,15 @@ SET cs.last_sequence_number = (
 
 -- ─── PHASE 3: Add Constraints ───────────────────────────────
 -- Unique index for idempotency per session
-CREATE UNIQUE INDEX IF NOT EXISTS idx_session_idempotency 
+CREATE UNIQUE INDEX idx_session_idempotency
     ON chat_messages(session_id, idempotency_key);
 
 -- Index for ordered message retrieval
-CREATE INDEX IF NOT EXISTS idx_session_sequence 
+CREATE INDEX idx_session_sequence
     ON chat_messages(session_id, sequence_number);
 
 -- Index for status queries (e.g., finding PENDING messages)
-CREATE INDEX IF NOT EXISTS idx_message_status 
+CREATE INDEX idx_message_status
     ON chat_messages(status);
 
 -- ─── PHASE 4: Character Set Migration (UTF-8 full support) ──

@@ -196,10 +196,16 @@ public class DocumentService {
             try {
                 if ("PDF".equalsIgnoreCase(savedDoc.getFileType())) {
                     savedDoc.setViewerFilePath(savedPath);
+                    savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.READY);
                     documentRepository.save(savedDoc);
                 } else if ("DOCX".equalsIgnoreCase(savedDoc.getFileType())) {
+                    savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.PROCESSING);
+                    documentRepository.save(savedDoc);
                     documentViewerConversionService.convertToViewerPdfAsync(
                             savedDoc.getId(), savedPath, savedDoc.getDocumentUuid(), savedDoc.getFileType());
+                } else {
+                    savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.UNSUPPORTED);
+                    documentRepository.save(savedDoc);
                 }
             } catch (Exception e) {
                 log.error("Viewer pipeline thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());

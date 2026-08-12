@@ -1,5 +1,6 @@
 package com.aiagent.service;
 
+import com.aiagent.model.ViewerStatus;
 import com.aiagent.repository.DocumentRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +50,7 @@ public class DocumentViewerConversionService {
         File originalFile = new File(originalFilePath);
         if (!originalFile.exists()) {
             log.error("[VIEWER-CONVERT] File gốc không tồn tại tại: {} cho document ID: {}", originalFilePath, documentId);
+            markFailed(documentId);
             return;
         }
 
@@ -70,12 +72,14 @@ public class DocumentViewerConversionService {
             if (!finished) {
                 process.destroyForcibly();
                 log.error("[VIEWER-CONVERT] Timeout sau {}s khi convert document ID: {}", conversionTimeoutSeconds, documentId);
+                markFailed(documentId);
                 return;
             }
 
             if (process.exitValue() != 0 || !Files.exists(libreOfficeOutput) || Files.size(libreOfficeOutput) <= 0) {
                 log.error("[VIEWER-CONVERT] LibreOffice convert thất bại (exitCode={}) cho document ID: {}",
                         process.exitValue(), documentId);
+                markFailed(documentId);
                 return;
             }
 
@@ -83,13 +87,22 @@ public class DocumentViewerConversionService {
 
             documentRepository.findById(documentId).ifPresentOrElse(doc -> {
                 doc.setViewerFilePath(targetPath.toString());
+                doc.setViewerStatus(ViewerStatus.READY);
                 documentRepository.save(doc);
                 log.info("[VIEWER-CONVERT] Thành công cho document ID: {}", documentId);
             }, () -> log.warn("[VIEWER-CONVERT] Document ID {} không còn tồn tại trong DB, bỏ qua cập nhật viewerFilePath.", documentId));
 
         } catch (Exception e) {
             log.error("[VIEWER-CONVERT] Lỗi khi convert document ID {}: {}", documentId, e.getMessage());
+            markFailed(documentId);
         }
+    }
+
+    private void markFailed(Long documentId) {
+        documentRepository.findById(documentId).ifPresent(doc -> {
+            doc.setViewerStatus(ViewerStatus.FAILED);
+            documentRepository.save(doc);
+        });
     }
 
     private String stripExtension(String filename) {
