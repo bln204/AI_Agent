@@ -10,7 +10,12 @@ import com.aiagent.rag.DocumentIngestionService;
 import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.reader.tika.TikaDocumentReader;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -19,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -82,10 +88,11 @@ public class DocumentService {
     }
 
     private final com.aiagent.service.DecisionNumberService decisionNumberService;
+    private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
     @Transactional
-    public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds, 
-                                 java.util.List<Long> projectIds, AccessLevel accessLevel, 
+    public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
+                                 java.util.List<Long> projectIds, AccessLevel accessLevel,
                                  String decision, com.aiagent.model.DocumentClassification classification,
                                  String projectName, String description, boolean internalSourceFlag,
                                  MultipartFile file, User uploader) throws java.io.IOException {
@@ -105,16 +112,52 @@ public class DocumentService {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một dự án cho mức truy cập PROJECT.");
         }
 
+        // --- Duplicate detection gate (Level 1/2/3). Runs entirely BEFORE any
+        // Document row or physical file is persisted, so a rejected upload
+        // never creates a row, never writes a file, never touches Qdrant.
+        // See DocumentDuplicateDetectionService for the access-scoped
+        // disclosure rule applied to the thrown exception. ---
+        String fileExtension = null;
+        String fileHash = null;
+        String normalizedFileContent = null;
+        String contentHash = null;
+        List<org.springframework.ai.document.Document> preSplitChunks = null;
+
+        boolean hasFile = file != null && !file.isEmpty();
+        if (hasFile) {
+            fileExtension = determineValidatedExtension(file);
+
+            fileHash = documentDuplicateDetectionService.hashBytes(file.getInputStream());
+            documentDuplicateDetectionService.checkFileDuplicate(fileHash, uploader);
+
+            String extractedText = extractTextSafely(file);
+            if (extractedText != null && !extractedText.isBlank()) {
+                normalizedFileContent = com.aiagent.util.NormalizationUtils.normalize(extractedText);
+                contentHash = documentDuplicateDetectionService.hashText(normalizedFileContent);
+                documentDuplicateDetectionService.checkContentDuplicate(contentHash, uploader);
+
+                TokenTextSplitter splitter = new TokenTextSplitter(800, 100, 5, 10000, true);
+                preSplitChunks = splitter.apply(List.of(
+                        new org.springframework.ai.document.Document(normalizedFileContent, Map.of())));
+                documentDuplicateDetectionService.checkSemanticDuplicate(preSplitChunks, uploader);
+            } else {
+                log.info("[DUPLICATE-CHECK] File has no extractable text (scanned/unsupported) — content/semantic checks skipped for uploader {}.",
+                        uploader.getEmail());
+            }
+        }
+
         Document doc = new Document();
         doc.setTitle(title);
-        doc.setContent(content != null ? content : "");
+        doc.setContent(normalizedFileContent != null ? normalizedFileContent : (content != null ? content : ""));
         doc.setAccessLevel(accessLevel != null ? accessLevel : AccessLevel.DEPARTMENT);
         doc.setUploadedBy(uploader);
         doc.setClassification(classification != null ? classification : com.aiagent.model.DocumentClassification.OTHER);
         doc.setDescription(description);
         doc.setInternalSourceFlag(internalSourceFlag);
         doc.setProjectName(projectName);
-        
+        doc.setFileHash(fileHash);
+        doc.setContentHash(contentHash);
+
         if (com.aiagent.model.DocumentClassification.DECISION_DOCUMENT.equals(classification)) {
             doc.setDecisionNumber(decisionNumberService.generateNextDecisionNumber());
         } else {
@@ -124,9 +167,9 @@ public class DocumentService {
         if (AccessLevel.DEPARTMENT.equals(accessLevel)) {
             doc.setProjects(new java.util.HashSet<>());
             doc.setProjectName(null);
-            
+
             if (RoleConstants.ROLE_MANAGER.equals(uploader.getRole().getCode()) && uploader.getDepartment() != null) {
-                log.info("[SECURITY-ENFORCE] Restricting MANAGER {} to upload only to department: {}", 
+                log.info("[SECURITY-ENFORCE] Restricting MANAGER {} to upload only to department: {}",
                         uploader.getEmail(), uploader.getDepartment().getCode());
                 departmentIds = java.util.List.of(uploader.getDepartment().getId());
             }
@@ -152,10 +195,28 @@ public class DocumentService {
         } else if (AccessLevel.PUBLIC.equals(accessLevel)) {
         }
 
-        Document savedDoc = documentRepository.save(doc);
+        Document savedDoc;
+        try {
+            savedDoc = documentRepository.save(doc);
+        } catch (DataIntegrityViolationException e) {
+            // Losing side of a concurrent duplicate upload: the application-level
+            // checks above passed, but another request committed the same
+            // file/content hash first (fileHash/contentHash carry a UNIQUE DB
+            // constraint — see V5 migration — which is the real race-condition
+            // guard, the earlier checks are only a fast-path). Re-run the exact
+            // checks so the loser gets the same structured duplicate response
+            // instead of a raw 500.
+            log.warn("[DUPLICATE-RACE] Unique constraint violated on save for uploader {} — re-checking hashes.", uploader.getEmail());
+            documentDuplicateDetectionService.checkFileDuplicate(fileHash, uploader);
+            documentDuplicateDetectionService.checkContentDuplicate(contentHash, uploader);
+            // Neither hash matched on re-check: the violation wasn't our
+            // duplicate guard — surface the original error rather than
+            // misreporting an unrelated constraint failure as a duplicate.
+            throw e;
+        }
 
-        if (file != null && !file.isEmpty()) {
-            String savedPath = saveFile(file);
+        if (hasFile) {
+            String savedPath = writeFileToDisk(file, fileExtension);
             savedDoc.setFilePath(savedPath);
             savedDoc.setFileType(getExtension(file.getOriginalFilename()));
 
@@ -167,7 +228,7 @@ public class DocumentService {
             java.util.List<Long> resolvedProjIds = savedDoc.getProjects().stream()
                     .map(com.aiagent.model.Project::getId)
                     .collect(java.util.stream.Collectors.toList());
-            
+
             String uploaderName = uploader.getUsername();
             String uploaderRole = uploader.getRole() != null ? uploader.getRole().getName() : "STAFF";
             String departmentNames = savedDoc.getDepartmentName();
@@ -179,13 +240,29 @@ public class DocumentService {
                     savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
 
             try {
-                documentIngestionService.ingestDocument(
-                        savedPath, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
-                        uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
-                        savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(), 
-                        savedDoc.isInternalSourceFlag(),
-                        savedDoc.getAccessLevel().name(),
-                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+                if (preSplitChunks != null) {
+                    // Text was already extracted + chunked above for the
+                    // duplicate check — reuse it instead of parsing the file
+                    // with Tika a second time.
+                    documentIngestionService.ingestPreExtracted(
+                            preSplitChunks, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
+                            uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
+                            savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
+                            savedDoc.isInternalSourceFlag(),
+                            savedDoc.getAccessLevel().name(),
+                            resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+                } else {
+                    // No extractable text was found during the duplicate check
+                    // (e.g. scanned PDF) — fall back to the from-disk pipeline,
+                    // which handles that case the same way it always has.
+                    documentIngestionService.ingestDocument(
+                            savedPath, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
+                            uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
+                            savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
+                            savedDoc.isInternalSourceFlag(),
+                            savedDoc.getAccessLevel().name(),
+                            resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+                }
             } catch (Exception e) {
                 log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
             }
@@ -203,7 +280,35 @@ public class DocumentService {
         return documentAccessService.canAccessDocument(user, doc);
     }
 
-    private String saveFile(MultipartFile file) throws IOException {
+    /**
+     * Best-effort text extraction used ONLY for the pre-persist duplicate
+     * check. Never throws — an unreadable/scanned/corrupted file is a normal,
+     * expected case (WORKING_RULES: must not crash on unsupported content),
+     * it just means content/semantic duplicate checks are skipped and the
+     * file falls back to the from-disk ingestion pipeline after acceptance.
+     */
+    private String extractTextSafely(MultipartFile file) {
+        try {
+            Resource resource = new InputStreamResource(file.getInputStream());
+            TikaDocumentReader reader = new TikaDocumentReader(resource);
+            List<org.springframework.ai.document.Document> documents = reader.read();
+            if (documents.isEmpty()) {
+                return null;
+            }
+            return documents.get(0).getContent();
+        } catch (Exception e) {
+            log.warn("[DUPLICATE-CHECK] Tika extraction failed during duplicate pre-check (file may be scanned/corrupted/unsupported): {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Filename/extension/size/magic-byte MIME validation (SEC-004) — does NOT
+     * write anything to disk. Split out of the old saveFile() so it can run
+     * before the duplicate-detection hashing, without prematurely persisting
+     * a file for a request that might still be rejected as a duplicate.
+     */
+    private String determineValidatedExtension(MultipartFile file) throws IOException {
         validateOriginalFilename(file.getOriginalFilename());
 
         String extension = getExtension(file.getOriginalFilename()).toLowerCase();
@@ -227,6 +332,15 @@ public class DocumentService {
             throw new IllegalArgumentException("Nội dung file không khớp với định dạng đã khai báo (." + extension + ").");
         }
 
+        return extension;
+    }
+
+    /**
+     * Physically writes an already-validated file to disk under a
+     * server-generated UUID name. Only ever called after every duplicate
+     * check has passed.
+     */
+    private String writeFileToDisk(MultipartFile file, String extension) throws IOException {
         // Filename is fully server-generated (UUID + validated extension) so the
         // client-supplied original filename can never influence the physical path.
         Path baseDir = Paths.get(uploadDir).toAbsolutePath().normalize();
@@ -265,11 +379,11 @@ public class DocumentService {
         int idx = filename.lastIndexOf('.');
         return idx >= 0 ? filename.substring(idx + 1).toUpperCase() : "";
     }
-    
+
     @Transactional
     public void deleteDocument(Long id, User requester) {
         Document doc = getDocument(id);
-        
+
         boolean canDelete = false;
         if (requester != null && requester.getRole() != null) {
             String roleCode = requester.getRole().getCode();
@@ -283,11 +397,11 @@ public class DocumentService {
                 canDelete = true;
             }
         }
-        
+
         if (!canDelete) {
             throw new SecurityException("Bạn không có quyền xoá tài liệu này.");
         }
-        
+
         try {
             documentIngestionService.deleteFromVectorStore(id);
         } catch (Exception e) {
@@ -295,7 +409,7 @@ public class DocumentService {
         }
 
         documentRepository.delete(doc);
-        
+
         if (doc.getFilePath() != null) {
             try {
                 Files.deleteIfExists(Paths.get(doc.getFilePath()));

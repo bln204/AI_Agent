@@ -51,6 +51,9 @@ class DocumentServiceUploadSecurityTest {
     @Mock
     private DecisionNumberService decisionNumberService;
 
+    @Mock
+    private DocumentDuplicateDetectionService documentDuplicateDetectionService;
+
     @TempDir
     Path uploadDir;
 
@@ -60,7 +63,8 @@ class DocumentServiceUploadSecurityTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         documentService = new DocumentService(documentRepository, documentIngestionService,
-                departmentRepository, projectRepository, documentAccessService, decisionNumberService);
+                departmentRepository, projectRepository, documentAccessService, decisionNumberService,
+                documentDuplicateDetectionService);
         ReflectionTestUtils.setField(documentService, "uploadDir", uploadDir.toString());
         ReflectionTestUtils.setField(documentService, "maxUploadSizeMb", 50L);
 

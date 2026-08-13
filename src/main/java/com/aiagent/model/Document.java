@@ -35,6 +35,18 @@ public class Document {
     @Column(length = 50)
     private String fileType;
 
+    // SHA-256 (hex) of the raw uploaded file bytes. Populated only when a file
+    // is attached; NULL for text-only documents. Nullable + unique so MySQL's
+    // unique index permits multiple NULLs (pre-existing rows never hashed).
+    @Column(name = "file_hash", length = 64, unique = true)
+    private String fileHash;
+
+    // SHA-256 (hex) of NormalizationUtils.normalize(extracted text). NULL when
+    // the file has no meaningful extractable text (scanned PDF/image) — see
+    // DocumentDuplicateDetectionService.
+    @Column(name = "content_hash", length = 64, unique = true)
+    private String contentHash;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "document_departments",

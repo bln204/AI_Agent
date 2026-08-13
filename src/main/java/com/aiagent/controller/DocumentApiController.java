@@ -1,5 +1,6 @@
 package com.aiagent.controller;
 
+import com.aiagent.exception.DocumentDuplicateException;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentClassification;
 import com.aiagent.model.User;
@@ -18,7 +19,9 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 @RestController
@@ -52,9 +55,18 @@ public class DocumentApiController {
 
         try {
             Document doc = documentService.uploadDocument(
-                    title, content, departmentIds, projectIds, accessLevel, 
+                    title, content, departmentIds, projectIds, accessLevel,
                     decisionNumber, classification, projectName, description, internalSource, file, user);
             return ResponseEntity.ok(doc);
+        } catch (DocumentDuplicateException e) {
+            log.info("Document upload rejected as duplicate for user {}: type={}", user.getEmail(), e.getDuplicateType());
+            Map<String, Object> body = new HashMap<>();
+            body.put("error", "DOCUMENT_DUPLICATE");
+            body.put("duplicateType", e.getDuplicateType().name());
+            body.put("duplicateDocumentId", e.getDuplicateDocumentId());
+            body.put("duplicateDocumentName", e.getDuplicateDocumentName());
+            body.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
         } catch (Exception e) {
             log.error("Document upload failed for user {}", user.getEmail(), e);
             return ResponseEntity.badRequest().body("Không thể tải tài liệu lên. Vui lòng kiểm tra lại tệp.");

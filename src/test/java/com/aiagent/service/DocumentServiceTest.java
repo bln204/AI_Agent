@@ -43,16 +43,22 @@ class DocumentServiceTest {
     @Mock
     private com.aiagent.service.DecisionNumberService decisionNumberService;
 
+    @Mock
+    private com.aiagent.service.DocumentDuplicateDetectionService documentDuplicateDetectionService;
+
     private DocumentService documentService;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
-        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy, decisionNumber
-        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, documentAccessService, decisionNumberService);
-        
+        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy, decisionNumber, duplicateDetection
+        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, documentAccessService, decisionNumberService, documentDuplicateDetectionService);
+
         // Fix @Value field
         ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");
+
+        // Default: no duplicate found for any hash (matches "unique document" path).
+        when(documentDuplicateDetectionService.hashBytes(any())).thenReturn("dummy-hash");
     }
 
     @Test

@@ -128,6 +128,15 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     boolean existsByDecisionNumber(String decisionNumber);
     boolean existsByTitle(String title);
 
+    /**
+     * Level 1 (exact file) / Level 2 (exact content) duplicate lookups.
+     * Excludes soft-deleted rows so a removed document never blocks a
+     * re-upload of the same file/content (mirrors the isDeleted invariant
+     * HydrationService already enforces for retrieval).
+     */
+    java.util.Optional<Document> findByFileHashAndIsDeletedFalse(String fileHash);
+    java.util.Optional<Document> findByContentHashAndIsDeletedFalse(String contentHash);
+
     java.util.Optional<Document> findByDocumentUuid(String documentUuid);
     
     @Query("SELECT DISTINCT d FROM Document d " +
