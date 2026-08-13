@@ -12,17 +12,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Pipeline Viewer — hoàn toàn tách biệt khỏi DocumentIngestionService/RAG.
  * Trách nhiệm duy nhất: tạo bản PDF phục vụ Document Viewer cho các định
- * dạng cần convert (hiện chỉ DOCX). Không đọc/ghi filePath gốc, không động
+ * dạng cần convert (DOCX, TXT, XLSX). Không đọc/ghi filePath gốc, không động
  * tới Tika/TokenTextSplitter/EmbeddingModel/Qdrant.
  */
 @Service
 @Slf4j
 public class DocumentViewerConversionService {
+
+    // Phải khớp với DocumentService.VIEWER_CONVERTIBLE_EXTENSIONS — định dạng
+    // LibreOffice headless convert được sang PDF (PDF gốc không cần convert).
+    private static final Set<String> CONVERTIBLE_EXTENSIONS = Set.of("DOCX", "TXT", "XLSX");
 
     private final DocumentRepository documentRepository;
 
@@ -41,9 +46,9 @@ public class DocumentViewerConversionService {
 
     @Async
     public void convertToViewerPdfAsync(Long documentId, String originalFilePath, String documentUuid, String fileType) {
-        if (!"DOCX".equalsIgnoreCase(fileType)) {
-            // Viewer không áp dụng cho định dạng này (vd. TXT) — no-op, không
-            // gọi LibreOffice, không đụng tới viewerFilePath.
+        if (fileType == null || !CONVERTIBLE_EXTENSIONS.contains(fileType.toUpperCase())) {
+            // Viewer không áp dụng cho định dạng này — no-op, không gọi
+            // LibreOffice, không đụng tới viewerFilePath.
             return;
         }
 
@@ -60,7 +65,7 @@ public class DocumentViewerConversionService {
         Path targetPath = outDir.resolve(documentUuid + "-viewer.pdf");
 
         try {
-            log.info("[VIEWER-CONVERT] Bắt đầu convert DOCX -> PDF cho document ID: {}", documentId);
+            log.info("[VIEWER-CONVERT] Bắt đầu convert {} -> PDF cho document ID: {}", fileType, documentId);
 
             ProcessBuilder pb = new ProcessBuilder(
                     libreOfficePath, "--headless", "--convert-to", "pdf",

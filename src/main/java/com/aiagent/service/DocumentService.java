@@ -34,13 +34,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DocumentService {
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "docx", "txt");
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "docx", "txt", "xlsx");
 
     private static final Map<String, String> ALLOWED_MIME_TYPE_BY_EXTENSION = Map.of(
             "pdf", "application/pdf",
             "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "txt", "text/plain"
+            "txt", "text/plain",
+            "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
+
+    // Định dạng LibreOffice headless convert được sang PDF cho Document Viewer
+    // (xem DocumentViewerConversionService). PDF không cần convert (dùng file gốc).
+    private static final Set<String> VIEWER_CONVERTIBLE_EXTENSIONS = Set.of("DOCX", "TXT", "XLSX");
 
     private final DocumentRepository documentRepository;
     private final DocumentIngestionService documentIngestionService;
@@ -275,7 +280,7 @@ public class DocumentService {
                     savedDoc.setViewerFilePath(savedPath);
                     savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.READY);
                     documentRepository.save(savedDoc);
-                } else if ("DOCX".equalsIgnoreCase(savedDoc.getFileType())) {
+                } else if (VIEWER_CONVERTIBLE_EXTENSIONS.contains(savedDoc.getFileType().toUpperCase())) {
                     savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.PROCESSING);
                     documentRepository.save(savedDoc);
                     documentViewerConversionService.convertToViewerPdfAsync(

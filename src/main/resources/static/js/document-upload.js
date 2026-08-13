@@ -11,10 +11,10 @@
 
     const TEXT = {
         defaultFileMessage: 'Kéo và thả tệp vào đây hoặc <strong>nhấn để chọn</strong>',
-        invalidFileMessage: 'Chỉ hỗ trợ tệp PDF, DOCX hoặc TXT.'
+        invalidFileMessage: 'Chỉ hỗ trợ tệp PDF, DOCX, TXT hoặc XLSX.'
     };
 
-    const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'txt'];
+    const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'txt', 'xlsx'];
 
     function getElement(selector) {
         return document.querySelector(selector);

@@ -115,7 +115,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 .doc-title:hover { text-decoration: underline; }
 
 .actions { display: flex; gap: 6px; }
-.btn-view, .btn-download {
+.btn-view {
     display: inline-flex; align-items: center; justify-content: center;
     width: 28px; height: 28px;
     background: var(--bg); border-radius: 6px;
@@ -124,7 +124,6 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     transition: all 0.2s;
 }
 .btn-view:hover     { background: #eef2ff; border-color: var(--primary); }
-.btn-download:hover { background: #f0fdf4; border-color: #16a34a; }
 
 /* Empty State */
 .empty-state { text-align: center; padding: 60px 20px; }

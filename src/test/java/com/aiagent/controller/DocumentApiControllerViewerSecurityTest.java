@@ -38,8 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * GET /api/documents/{id}/viewer phải tuân thủ đúng checklist bảo mật:
- * Authenticate -> Authorize (canAccessDocument, giống /documents/{id}/download)
- * -> document tồn tại -> viewer file tồn tại -> stream application/pdf.
+ * Authenticate -> Authorize (canAccessDocument) -> document tồn tại ->
+ * viewer file tồn tại -> stream application/pdf.
  * Không được đọc file vật lý trước khi authorization pass (chống IDOR).
  */
 @WebMvcTest(DocumentApiController.class)
