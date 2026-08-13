@@ -58,6 +58,8 @@ class DocumentServiceDuplicateFlowTest {
     private DecisionNumberService decisionNumberService;
     @Mock
     private DocumentDuplicateDetectionService documentDuplicateDetectionService;
+    @Mock
+    private DocumentViewerConversionService documentViewerConversionService;
 
     private DocumentService documentService;
 
@@ -65,7 +67,8 @@ class DocumentServiceDuplicateFlowTest {
     void setUp(@org.junit.jupiter.api.io.TempDir Path tempDir) throws IOException {
         MockitoAnnotations.openMocks(this);
         documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
-                projectRepository, documentAccessService, decisionNumberService, documentDuplicateDetectionService);
+                projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService,
+                documentDuplicateDetectionService);
         ReflectionTestUtils.setField(documentService, "uploadDir", tempDir.toString());
         ReflectionTestUtils.setField(documentService, "maxUploadSizeMb", 50L);
 

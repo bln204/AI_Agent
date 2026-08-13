@@ -54,15 +54,11 @@ class DocumentServiceTest {
     @BeforeEach
     void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
-        // Correct constructor order (from DocumentService.java): repo, ingestion, dept,
-        // proj, policy, viewerConversion, decisionNumber
+        // Constructor order (from DocumentService.java): repo, ingestion, dept, proj,
+        // policy, viewerConversion, decisionNumber, duplicateDetection
         documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
-                projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService);
-
-        // Correct constructor order (from DocumentService.java): repo, ingestion, dept,
-        // proj, policy, decisionNumber, duplicateDetection
-        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
-                projectRepository, documentAccessService, decisionNumberService, documentDuplicateDetectionService);
+                projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService,
+                documentDuplicateDetectionService);
 
         // Fix @Value field
         ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");

@@ -66,7 +66,6 @@ class DocumentServiceUploadSecurityTest {
         MockitoAnnotations.openMocks(this);
         documentService = new DocumentService(documentRepository, documentIngestionService,
                 departmentRepository, projectRepository, documentAccessService, documentViewerConversionService,
-                decisionNumberService,
                 decisionNumberService, documentDuplicateDetectionService);
         ReflectionTestUtils.setField(documentService, "uploadDir", uploadDir.toString());
         ReflectionTestUtils.setField(documentService, "maxUploadSizeMb", 50L);
