@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,7 +34,13 @@ public class ChatMessage {
     @Column(name = "idempotency_key", length = 128)
     private String idempotencyKey;
 
+    // Hibernate 6 maps @Enumerated(STRING) to the dialect's native ENUM type
+    // by default on MySQL; force plain VARCHAR to match the actual column
+    // (created via migration as VARCHAR(32), see V1/V3 migrations) instead of
+    // requiring a native MySQL ENUM that would need a schema change every
+    // time a MessageStatus value is added.
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", length = 32, nullable = false)
     private MessageStatus status;
 

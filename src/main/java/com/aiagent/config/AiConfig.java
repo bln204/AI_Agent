@@ -41,34 +41,57 @@ public class AiConfig {
     @Bean
     public CommandLineRunner initializeQdrant() {
         return args -> {
-            try {
-                RestTemplate restTemplate = new RestTemplate();
-                String url = String.format("http://%s:6333/collections/%s", qdrantHost, collectionName);
+            // Qdrant container may still be finishing startup even though Docker
+            // reports it healthy (race between healthcheck poll and readiness) or
+            // may hiccup transiently on a slow host, so retry a few times with
+            // backoff instead of giving up after a single failed attempt — a
+            // silent failure here leaves RAG broken until the app is restarted.
+            int maxAttempts = 5;
+            long backoffMillis = 2000;
 
-                log.info("Verifying Qdrant collection via REST: {}", url);
-
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    restTemplate.getForObject(url, String.class);
-                    log.info("Qdrant collection '{}' already exists.", collectionName);
-                } catch (Exception e) {
-                    log.warn("Collection '{}' not found, creating with 384 dimensions (BGE-Small)...", collectionName);
+                    RestTemplate restTemplate = new RestTemplate();
+                    String url = String.format("http://%s:6333/collections/%s", qdrantHost, collectionName);
 
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    log.info("Verifying Qdrant collection via REST (attempt {}/{}): {}", attempt, maxAttempts, url);
 
-                    Map<String, Object> vectors = new HashMap<>();
-                    vectors.put("size", 384); // BGE-small-en-v1.5 has 384 dimensions
-                    vectors.put("distance", "Cosine");
+                    try {
+                        restTemplate.getForObject(url, String.class);
+                        log.info("Qdrant collection '{}' already exists.", collectionName);
+                    } catch (Exception e) {
+                        log.warn("Collection '{}' not found, creating with 384 dimensions (BGE-Small)...", collectionName);
 
-                    Map<String, Object> body = new HashMap<>();
-                    body.put("vectors", vectors);
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(MediaType.APPLICATION_JSON);
 
-                    HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-                    restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
-                    log.info("Successfully created Qdrant collection: {}", collectionName);
+                        Map<String, Object> vectors = new HashMap<>();
+                        vectors.put("size", 384); // BGE-small-en-v1.5 has 384 dimensions
+                        vectors.put("distance", "Cosine");
+
+                        Map<String, Object> body = new HashMap<>();
+                        body.put("vectors", vectors);
+
+                        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                        restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
+                        log.info("Successfully created Qdrant collection: {}", collectionName);
+                    }
+                    return; // success, no more retries needed
+                } catch (Exception ex) {
+                    if (attempt == maxAttempts) {
+                        log.error("Critical error during Qdrant initialization after {} attempts: {}", maxAttempts, ex.getMessage());
+                    } else {
+                        log.warn("Qdrant not reachable yet (attempt {}/{}): {}. Retrying in {}ms...",
+                                attempt, maxAttempts, ex.getMessage(), backoffMillis);
+                        try {
+                            Thread.sleep(backoffMillis);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
+                        backoffMillis *= 2;
+                    }
                 }
-            } catch (Exception ex) {
-                log.error("Critical error during Qdrant initialization: {}", ex.getMessage());
             }
         };
     }

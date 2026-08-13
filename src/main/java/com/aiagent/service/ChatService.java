@@ -117,10 +117,14 @@ public class ChatService {
         ChatMessage aiPlaceholder = new ChatMessage();
         aiPlaceholder.setSession(session);
         aiPlaceholder.setRole("AI");
-        aiPlaceholder.setContent(""); 
+        aiPlaceholder.setContent("");
         aiPlaceholder.setStatus(MessageStatus.IN_PROGRESS);
         aiPlaceholder.setSequenceNumber(aiSeq);
-        aiPlaceholder.setIdempotencyKey(idempotencyKey); 
+        // Do NOT reuse idempotencyKey here: the (session_id, idempotency_key)
+        // unique index allows only one row per key per session, and the user
+        // message above already claims this key. The AI/user pair is matched
+        // by sequenceNumber elsewhere, not by idempotencyKey, so leaving this
+        // null (MySQL allows multiple NULLs in a unique index) is safe.
         messageRepository.save(aiPlaceholder);
 
         log.info("Turn started: session={}, userSeq={}, aiSeq={}", sessionId, userSeq, aiSeq);

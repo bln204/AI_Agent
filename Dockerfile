@@ -2,19 +2,38 @@
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies to cache them
+# Copy pom.xml and download dependencies to cache them.
+# Retry on transient network errors (dropped connections mid-download of large
+# jars like onnxruntime) instead of failing the whole build on one bad transfer.
+# The ~/.m2 cache mount persists across build re-runs, so a retry after a
+# mid-build DNS/network blip only re-fetches what's still missing instead of
+# re-downloading everything from scratch.
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn dependency:go-offline -B \
+    -Dmaven.wagon.http.retryHandler.count=5 \
+    -Dmaven.wagon.httpconnectionManager.ttlSeconds=25
 
 # Copy the rest of the source code
 COPY src ./src
 
 # Build the application
-RUN mvn clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn clean package -DskipTests
 
 # Stage 2: Create the final production image
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
+
+# LibreOffice headless — required by DocumentViewerConversionService to
+# convert uploaded DOCX files to PDF for the Document Viewer feature.
+# libreoffice-writer pulls in the soffice binary + its core dependencies via
+# apt; --no-install-recommends avoids installing the full office suite
+# (calc/impress/etc.) that isn't needed for DOCX conversion.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libreoffice-writer && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group for security
 RUN addgroup --system spring && adduser --system --ingroup spring spring

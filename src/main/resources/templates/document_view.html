@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${document.title + ' - AI Agent'}">Tài liệu - AI Agent</title>
     <div th:replace="~{fragments/head_links :: head_links}"></div>
+    <link rel="stylesheet" href="/css/document-viewer.css">
 </head>
 <body>
 <div class="docs-page flex h-screen overflow-hidden">
@@ -54,23 +55,44 @@
                 </div>
 
                 <p class="text-sm text-slate-500 mt-4" th:if="${document.description != null and !#strings.isEmpty(document.description)}" th:text="${document.description}">Mô tả</p>
-
-                <div class="mt-5" th:if="${document.filePath != null}">
-                    <a th:href="@{/documents/{id}/download(id=${document.id})}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 transition-colors">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Tải xuống tệp gốc
-                    </a>
-                </div>
             </div>
 
-            <!-- Nội dung tài liệu -->
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6" th:if="${document.content != null and !#strings.isEmpty(document.content)}">
-                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Nội dung</h3>
-                <div class="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed" th:text="${document.content}"></div>
+            <!-- Document Viewer (PDF.js) -->
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6" th:if="${document.viewerStatus.name() == 'READY'}">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Xem trực tuyến</h3>
+                <div id="pdf-viewer" th:attr="data-document-id=${document.id}">
+                    <div class="pdf-viewer-toolbar">
+                        <button type="button" id="pdf-viewer-prev">‹ Trang trước</button>
+                        <span id="pdf-viewer-page-info">Đang tải...</span>
+                        <button type="button" id="pdf-viewer-next">Trang sau ›</button>
+                        <button type="button" id="pdf-viewer-zoom-out">−</button>
+                        <button type="button" id="pdf-viewer-zoom-in">+</button>
+                    </div>
+                    <span id="pdf-viewer-status"></span>
+                    <canvas id="pdf-viewer-canvas"></canvas>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
+                 id="viewer-pending-block"
+                 th:if="${document.viewerStatus.name() == 'PENDING' or document.viewerStatus.name() == 'PROCESSING'}"
+                 th:attr="data-document-id=${document.id}">
+                Tài liệu đang được chuẩn bị để xem trực tuyến...
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
+                 th:if="${document.viewerStatus.name() == 'FAILED'}">
+                Không thể tạo bản xem trước tài liệu.
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
+                 th:if="${document.viewerStatus.name() == 'UNSUPPORTED'}">
+                Định dạng này chưa hỗ trợ xem trực tiếp.
             </div>
 
         </div>
     </main>
 </div>
+<script src="/vendor/pdfjs/pdf.min.js" th:if="${document.viewerStatus.name() == 'READY'}"></script>
+<script src="/js/document-viewer.js" th:if="${document.viewerStatus.name() == 'READY'}"></script>
+<script src="/js/document-viewer-status.js"
+        th:if="${document.viewerStatus.name() == 'PENDING' or document.viewerStatus.name() == 'PROCESSING'}"></script>
 </body>
 </html>

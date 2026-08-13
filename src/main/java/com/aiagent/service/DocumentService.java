@@ -47,6 +47,7 @@ public class DocumentService {
     private final DepartmentRepository departmentRepository;
     private final ProjectRepository projectRepository;
     private final DocumentAccessService documentAccessService;
+    private final DocumentViewerConversionService documentViewerConversionService;
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
@@ -265,6 +266,26 @@ public class DocumentService {
                 }
             } catch (Exception e) {
                 log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
+            }
+
+            // Pipeline Viewer — song song, độc lập với ingestion RAG ở trên.
+            // Không đụng filePath (vẫn trỏ file gốc cho Tika/RAG).
+            try {
+                if ("PDF".equalsIgnoreCase(savedDoc.getFileType())) {
+                    savedDoc.setViewerFilePath(savedPath);
+                    savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.READY);
+                    documentRepository.save(savedDoc);
+                } else if ("DOCX".equalsIgnoreCase(savedDoc.getFileType())) {
+                    savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.PROCESSING);
+                    documentRepository.save(savedDoc);
+                    documentViewerConversionService.convertToViewerPdfAsync(
+                            savedDoc.getId(), savedPath, savedDoc.getDocumentUuid(), savedDoc.getFileType());
+                } else {
+                    savedDoc.setViewerStatus(com.aiagent.model.ViewerStatus.UNSUPPORTED);
+                    documentRepository.save(savedDoc);
+                }
+            } catch (Exception e) {
+                log.error("Viewer pipeline thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
             }
         }
 

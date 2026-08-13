@@ -46,13 +46,23 @@ class DocumentServiceTest {
     @Mock
     private com.aiagent.service.DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
+    @Mock
+    private com.aiagent.service.DocumentViewerConversionService documentViewerConversionService;
+
     private DocumentService documentService;
 
     @BeforeEach
     void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
-        // Correct constructor order (from DocumentService.java): repo, ingestion, dept, proj, policy, decisionNumber, duplicateDetection
-        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository, projectRepository, documentAccessService, decisionNumberService, documentDuplicateDetectionService);
+        // Correct constructor order (from DocumentService.java): repo, ingestion, dept,
+        // proj, policy, viewerConversion, decisionNumber
+        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
+                projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService);
+
+        // Correct constructor order (from DocumentService.java): repo, ingestion, dept,
+        // proj, policy, decisionNumber, duplicateDetection
+        documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
+                projectRepository, documentAccessService, decisionNumberService, documentDuplicateDetectionService);
 
         // Fix @Value field
         ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");
@@ -74,7 +84,9 @@ class DocumentServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "test.pdf", "application/pdf", "test".getBytes());
 
         SecurityException exception = assertThrows(SecurityException.class, () -> {
-            documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null, "desc", true, file, uploader);
+            documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null,
+                    com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER,
+                    null, "desc", true, file, uploader);
         });
 
         assertEquals("Bạn không có quyền tải lên tài liệu.", exception.getMessage());
@@ -88,7 +100,7 @@ class DocumentServiceTest {
         Role role = new Role();
         role.setCode(RoleConstants.ROLE_MANAGER);
         uploader.setRole(role);
-        
+
         Department dept = new Department();
         dept.setId(10L);
         dept.setName("Nhân sự");
@@ -100,7 +112,8 @@ class DocumentServiceTest {
         // Fix: Mock findAllById which is used to populate doc.setDepartments
         when(departmentRepository.findAllById(anyList())).thenAnswer(invocation -> {
             java.util.List<Long> ids = invocation.getArgument(0);
-            if (ids.contains(10L)) return java.util.List.of(dept);
+            if (ids.contains(10L))
+                return java.util.List.of(dept);
             return java.util.Collections.emptyList();
         });
 
@@ -109,13 +122,13 @@ class DocumentServiceTest {
         when(documentRepository.save(any(Document.class))).thenReturn(mockedDoc);
 
         // Call with a different department ID (100L) - should be overridden or filtered
-        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null, "desc", true, null, uploader);
+        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null,
+                com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null,
+                "desc", true, null, uploader);
 
         // verify that the document saved has the uploader's department
-        verify(documentRepository, atLeastOnce()).save(argThat(doc -> 
-            doc.getDepartments().size() == 1 && 
-            doc.getDepartments().iterator().next().getCode().equals("HR")
-        ));
+        verify(documentRepository, atLeastOnce()).save(argThat(doc -> doc.getDepartments().size() == 1 &&
+                doc.getDepartments().iterator().next().getCode().equals("HR")));
     }
 
     @Test
@@ -125,17 +138,18 @@ class DocumentServiceTest {
         Role role = new Role();
         role.setCode(RoleConstants.ROLE_DIRECTOR);
         uploader.setRole(role);
-        
+
         Department targetDept = new Department();
         targetDept.setId(100L);
         targetDept.setName("IT");
         targetDept.setCode("IT");
-        
+
         when(documentAccessService.canUpload(uploader)).thenReturn(true);
         when(departmentRepository.findById(100L)).thenReturn(Optional.of(targetDept));
         when(departmentRepository.findAllById(anyList())).thenAnswer(invocation -> {
             java.util.List<Long> ids = invocation.getArgument(0);
-            if (ids.contains(100L)) return java.util.List.of(targetDept);
+            if (ids.contains(100L))
+                return java.util.List.of(targetDept);
             return java.util.Collections.emptyList();
         });
 
@@ -144,11 +158,11 @@ class DocumentServiceTest {
         when(documentRepository.save(any(Document.class))).thenReturn(mockedDoc);
 
         // Call with department ID 100L
-        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null, com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null, "desc", true, null, uploader);
+        documentService.uploadDocument("Title", "Content", java.util.List.of(100L), null,
+                com.aiagent.model.AccessLevel.DEPARTMENT, null, com.aiagent.model.DocumentClassification.OTHER, null,
+                "desc", true, null, uploader);
 
-        verify(documentRepository, atLeastOnce()).save(argThat(doc -> 
-            doc.getDepartments().size() == 1 && 
-            doc.getDepartments().iterator().next().getCode().equals("IT")
-        ));
+        verify(documentRepository, atLeastOnce()).save(argThat(doc -> doc.getDepartments().size() == 1 &&
+                doc.getDepartments().iterator().next().getCode().equals("IT")));
     }
 }

@@ -7,10 +7,6 @@ import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.service.DocumentService;
 import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -24,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.nio.file.Paths;
 import java.util.List;
 
 @Controller
@@ -148,34 +143,6 @@ public class DocumentController {
         model.addAttribute("document", doc);
         model.addAttribute("currentUser", user);
         return "document_view";
-    }
-
-    @GetMapping("/documents/{id}/download")
-    public ResponseEntity<Resource> downloadDocument(@PathVariable Long id, Authentication authentication) {
-        User user = resolveUser(authentication);
-        if (user == null) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
-        }
-
-        Document doc = documentService.getDocument(id);
-
-        if (doc == null || doc.getFilePath() == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        if (!documentAccessService.canAccessDocument(user, doc)) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
-        }
-
-        try {
-            Resource resource = new UrlResource(Paths.get(doc.getFilePath()).toUri());
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + resource.getFilename() + "\"")
-                    .body(resource);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
     }
 
     @PostMapping("/documents/{id}/delete")

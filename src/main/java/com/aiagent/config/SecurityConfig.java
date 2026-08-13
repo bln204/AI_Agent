@@ -11,6 +11,9 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -30,6 +33,15 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CustomUserDetailsService customUserDetailsService;
     private final AuthRateLimitFilter authRateLimitFilter;
+    private final ClientRegistrationRepository clientRegistrationRepository;
+
+    private OAuth2AuthorizationRequestResolver googleAuthorizationRequestResolver() {
+        DefaultOAuth2AuthorizationRequestResolver resolver = new DefaultOAuth2AuthorizationRequestResolver(
+                clientRegistrationRepository, "/oauth2/authorization");
+        resolver.setAuthorizationRequestCustomizer(customizer ->
+                customizer.additionalParameters(params -> params.put("prompt", "select_account")));
+        return resolver;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -85,6 +97,13 @@ public class SecurityConfig {
             )
             .oauth2Login(oauth2 -> oauth2
                 .loginPage("/login")
+                // Google keeps its own SSO session in a cookie separate from ours,
+                // so without this it silently re-authenticates whichever Google
+                // account was last used instead of letting the user pick. This
+                // forces Google's account chooser to show every time.
+                .authorizationEndpoint(endpoint -> endpoint
+                    .authorizationRequestResolver(googleAuthorizationRequestResolver())
+                )
                 .redirectionEndpoint(redir -> redir
                     .baseUri("/login/oauth2/google")
                 )

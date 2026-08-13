@@ -53,6 +53,8 @@ class DocumentServiceUploadSecurityTest {
 
     @Mock
     private DocumentDuplicateDetectionService documentDuplicateDetectionService;
+    @Mock
+    private DocumentViewerConversionService documentViewerConversionService;
 
     @TempDir
     Path uploadDir;
@@ -63,15 +65,17 @@ class DocumentServiceUploadSecurityTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         documentService = new DocumentService(documentRepository, documentIngestionService,
-                departmentRepository, projectRepository, documentAccessService, decisionNumberService,
-                documentDuplicateDetectionService);
+                departmentRepository, projectRepository, documentAccessService, documentViewerConversionService,
+                decisionNumberService,
+                decisionNumberService, documentDuplicateDetectionService);
         ReflectionTestUtils.setField(documentService, "uploadDir", uploadDir.toString());
         ReflectionTestUtils.setField(documentService, "maxUploadSizeMb", 50L);
 
         when(documentAccessService.canUpload(any())).thenReturn(true);
         when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> {
             Document d = invocation.getArgument(0);
-            if (d.getId() == null) d.setId(1L);
+            if (d.getId() == null)
+                d.setId(1L);
             return d;
         });
     }
@@ -158,8 +162,7 @@ class DocumentServiceUploadSecurityTest {
                 "..\\..\\outside.pdf",
                 "/etc/passwd.pdf",
                 "C:\\Windows\\win.ini.pdf",
-                "....//....//file.pdf"
-        );
+                "....//....//file.pdf");
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -175,7 +178,8 @@ class DocumentServiceUploadSecurityTest {
 
     private boolean isDirEmptyOfEscapedFiles() {
         Path parent = uploadDir.getParent();
-        if (parent == null) return true;
+        if (parent == null)
+            return true;
         try (Stream<Path> siblings = Files.list(parent)) {
             return siblings.filter(p -> !p.equals(uploadDir))
                     .noneMatch(p -> p.getFileName().toString().contains("outside")
@@ -195,7 +199,8 @@ class DocumentServiceUploadSecurityTest {
 
     @Test
     void doubleExtension_withMismatchedContent_isRejected() {
-        // Extension says .pdf but content is plain text pretending to be a script -> content mismatch.
+        // Extension says .pdf but content is plain text pretending to be a script ->
+        // content mismatch.
         MockMultipartFile file = new MockMultipartFile("file", "invoice.pdf.exe", "application/pdf",
                 "not a real pdf".getBytes(StandardCharsets.UTF_8));
         assertThrows(IllegalArgumentException.class, () -> uploadWith(file));

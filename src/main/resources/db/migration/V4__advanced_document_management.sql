@@ -9,8 +9,9 @@ ALTER TABLE documents ADD COLUMN department_name VARCHAR(100);
 ALTER TABLE documents ADD COLUMN project_name VARCHAR(100);
 
 -- Update existing records with UUIDs if needed (optional but good for consistency)
-UPDATE documents SET document_uuid = (SELECT gen_random_uuid()::text) WHERE document_uuid IS NULL;
-ALTER TABLE documents ALTER COLUMN document_uuid SET NOT NULL;
+-- (uses MySQL's UUID(), not Postgres's gen_random_uuid()::text)
+UPDATE documents SET document_uuid = UUID() WHERE document_uuid IS NULL;
+ALTER TABLE documents MODIFY COLUMN document_uuid VARCHAR(36) NOT NULL;
 
 -- Create table for decision number sequence
 CREATE TABLE decision_number_sequences (

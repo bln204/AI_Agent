@@ -10,8 +10,11 @@ import com.aiagent.service.DocumentService;
 import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,10 +22,10 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 
 @RestController
 @RequestMapping(value = "/api/documents", produces = "application/json;charset=UTF-8")
@@ -51,7 +54,8 @@ public class DocumentApiController {
             @RequestParam(value = "file", required = false) MultipartFile file) {
 
         User user = resolveUser(authentication);
-        if (user == null) return ResponseEntity.status(401).body("Unauthorized");
+        if (user == null)
+            return ResponseEntity.status(401).body("Unauthorized");
 
         try {
             Document doc = documentService.uploadDocument(
@@ -59,7 +63,8 @@ public class DocumentApiController {
                     decisionNumber, classification, projectName, description, internalSource, file, user);
             return ResponseEntity.ok(doc);
         } catch (DocumentDuplicateException e) {
-            log.info("Document upload rejected as duplicate for user {}: type={}", user.getEmail(), e.getDuplicateType());
+            log.info("Document upload rejected as duplicate for user {}: type={}", user.getEmail(),
+                    e.getDuplicateType());
             Map<String, Object> body = new HashMap<>();
             body.put("error", "DOCUMENT_DUPLICATE");
             body.put("duplicateType", e.getDuplicateType().name());
@@ -76,7 +81,8 @@ public class DocumentApiController {
     @GetMapping
     public ResponseEntity<List<Document>> getAllDocuments(Authentication authentication) {
         User user = resolveUser(authentication);
-        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (user == null)
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         List<Document> accessible = documentService
                 .getAccessibleDocumentsPaginated(user, null, Pageable.unpaged())
                 .getContent();
@@ -86,7 +92,8 @@ public class DocumentApiController {
     @GetMapping("/{id}")
     public ResponseEntity<Document> getDocument(@PathVariable Long id, Authentication authentication) {
         User user = resolveUser(authentication);
-        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (user == null)
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         Document doc = documentService.getDocument(id);
         if (!documentAccessService.canAccessDocument(user, doc)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
@@ -94,20 +101,78 @@ public class DocumentApiController {
         return ResponseEntity.ok(doc);
     }
 
-    @GetMapping("/search")
-    public ResponseEntity<List<Document>> searchDocuments(@RequestParam("keyword") String keyword, Authentication authentication) {
+    @GetMapping(value = "/{id}/viewer", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<Resource> getDocumentViewer(@PathVariable Long id, Authentication authentication) {
         User user = resolveUser(authentication);
-        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (user == null)
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        Document doc;
+        try {
+            doc = documentService.getDocument(id);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        String viewerPath = doc.getViewerFilePath();
+        if (viewerPath == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        try {
+            Resource resource = new UrlResource(Paths.get(viewerPath).normalize().toUri());
+            if (!resource.exists() || !resource.isReadable()) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/{id}/viewer-status")
+    public ResponseEntity<java.util.Map<String, String>> getViewerStatus(@PathVariable Long id,
+            Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null)
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        Document doc;
+        try {
+            doc = documentService.getDocument(id);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+
+        if (!documentAccessService.canAccessDocument(user, doc)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(java.util.Map.of("status", doc.getViewerStatus().name()));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<Document>> searchDocuments(@RequestParam("keyword") String keyword,
+            Authentication authentication) {
+        User user = resolveUser(authentication);
+        if (user == null)
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         String roleCode = user.getRole() != null ? user.getRole().getCode() : RoleConstants.ROLE_GUEST;
         Long departmentId = user.getDepartment() != null ? user.getDepartment().getId() : null;
-        List<Document> results = documentRepository.findCandidateDocuments(keyword, roleCode, user.getId(), departmentId);
+        List<Document> results = documentRepository.findCandidateDocuments(keyword, roleCode, user.getId(),
+                departmentId);
         return ResponseEntity.ok(results);
     }
 
     @GetMapping("/decision/{smecode}")
     public ResponseEntity<Document> getByDecisionNumber(@PathVariable String smecode, Authentication authentication) {
         User user = resolveUser(authentication);
-        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (user == null)
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         return documentRepository.findByDecisionNumber(smecode)
                 .map(doc -> {
                     if (!documentAccessService.canAccessDocument(user, doc)) {
@@ -119,7 +184,8 @@ public class DocumentApiController {
     }
 
     private User resolveUser(Authentication authentication) {
-        if (authentication == null) return null;
+        if (authentication == null)
+            return null;
         Object principal = authentication.getPrincipal();
         String email = null;
         if (principal instanceof OAuth2User oAuth2User) {
@@ -127,7 +193,8 @@ public class DocumentApiController {
         } else if (principal instanceof UserDetails userDetails) {
             email = userDetails.getUsername();
         }
-        if (email == null) return null;
+        if (email == null)
+            return null;
         return userRepository.findByEmail(email).orElse(null);
     }
 }
