@@ -55,13 +55,6 @@
                 </div>
 
                 <p class="text-sm text-slate-500 mt-4" th:if="${document.description != null and !#strings.isEmpty(document.description)}" th:text="${document.description}">Mô tả</p>
-
-                <div class="mt-5" th:if="${document.filePath != null}">
-                    <a th:href="@{/documents/{id}/download(id=${document.id})}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 transition-colors">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Tải xuống tệp gốc
-                    </a>
-                </div>
             </div>
 
             <!-- Document Viewer (PDF.js) -->
@@ -92,12 +85,6 @@
             <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6 text-sm text-slate-500"
                  th:if="${document.viewerStatus.name() == 'UNSUPPORTED'}">
                 Định dạng này chưa hỗ trợ xem trực tiếp.
-            </div>
-
-            <!-- Nội dung tài liệu -->
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6" th:if="${document.content != null and !#strings.isEmpty(document.content)}">
-                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Nội dung</h3>
-                <div class="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed" th:text="${document.content}"></div>
             </div>
 
         </div>
