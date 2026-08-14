@@ -16,6 +16,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -72,5 +75,42 @@ class MaintenanceControllerSecurityTest {
 
         mockMvc.perform(post("/api/maintenance/reindex").with(csrf()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void purgeOrphans_anonymous_isUnauthorized() throws Exception {
+        mockMvc.perform(post("/api/maintenance/purge-orphans").param("documentIds", "20").with(csrf()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(username = "employee@company.com", authorities = "ROLE_EMPLOYEE")
+    void purgeOrphans_employee_isForbidden() throws Exception {
+        mockMvc.perform(post("/api/maintenance/purge-orphans").param("documentIds", "20").with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "manager@company.com", authorities = "ROLE_MANAGER")
+    void purgeOrphans_manager_isForbidden() throws Exception {
+        mockMvc.perform(post("/api/maintenance/purge-orphans").param("documentIds", "20").with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "director@company.com", authorities = "ROLE_DIRECTOR")
+    void purgeOrphans_director_purgesOnlyTrulyOrphanedIds() throws Exception {
+        // 20 no longer exists in the DB (orphan) -> must be purged.
+        // 21 still exists (a live document) -> must NEVER be purged through this endpoint.
+        when(documentRepository.existsById(20L)).thenReturn(false);
+        when(documentRepository.existsById(21L)).thenReturn(true);
+
+        mockMvc.perform(post("/api/maintenance/purge-orphans")
+                        .param("documentIds", "20", "21")
+                        .with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(ingestionService, times(1)).deleteFromVectorStore(20L);
+        verify(ingestionService, never()).deleteFromVectorStore(21L);
     }
 }

@@ -25,7 +25,16 @@ public class MetadataFilterBuilder {
             String metadataKey = mapToMetadataKey(entity.getType());
             if (metadataKey == null) continue;
 
-            Filter.Expression current = b.eq(metadataKey, entity.getValue()).build();
+            // ROW_VALUE metadata (XlsxChunker) is stored via
+            // NormalizationUtils.normalizeForMatching (lowercase + diacritics
+            // stripped) for case/diacritics-insensitive lookup — normalize
+            // the query-side value the same way so e.g. "Nguyễn Văn 11" still
+            // matches a cell stored as "Nguyen Van 11".
+            String filterValue = (entity.getType() == EntityType.ROW_VALUE)
+                    ? com.aiagent.util.NormalizationUtils.normalizeForMatching(entity.getValue())
+                    : entity.getValue();
+
+            Filter.Expression current = b.eq(metadataKey, filterValue).build();
             
             if (combined == null) {
                 combined = current;
@@ -57,6 +66,7 @@ public class MetadataFilterBuilder {
             case DEPARTMENT -> "department"; // Ingestion uses department
             case TAG -> "tags";
             case KEYWORD -> "keyword";
+            case ROW_VALUE -> "row_values"; // XlsxChunker: literal cell values of one ingested row
             default -> null;
         };
     }

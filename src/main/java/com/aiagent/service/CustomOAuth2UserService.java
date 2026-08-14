@@ -61,10 +61,31 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         enrichedAttributes.put("avatarUrl",  user.getAvatarUrl()  != null ? user.getAvatarUrl()  : picture);
         enrichedAttributes.put("dbUserId",   user.getId());
 
+        // BUG FIX: OAuth2UserAuthority's single-arg constructor hardcodes the
+        // authority to "ROLE_USER", completely ignoring the user's actual DB
+        // role — so every Spring Security hasRole()/@PreAuthorize check
+        // (e.g. MaintenanceController's DIRECTOR-only endpoints) silently
+        // failed for every Google-login user regardless of their real role.
+        // Mirrors CustomUserDetailsService's (form login) authority mapping
+        // exactly, so both login methods grant the same authority for the
+        // same DB role — role assignment/user creation logic above is
+        // untouched, only how that already-resolved role becomes a
+        // Spring Security authority string.
         Set<OAuth2UserAuthority> authorities = Collections.singleton(
-                new OAuth2UserAuthority(enrichedAttributes));
+                new OAuth2UserAuthority(resolveAuthority(user), enrichedAttributes));
 
         return new DefaultOAuth2User(authorities, enrichedAttributes, "email");
+    }
+
+    /**
+     * Same "ROLE_&lt;CODE&gt;" mapping as CustomUserDetailsService (form login).
+     * Package-private (not private) so it can be verified directly in tests
+     * without mocking the full OAuth2 HTTP userinfo round-trip that
+     * loadUser() performs via the DefaultOAuth2UserService superclass.
+     */
+    String resolveAuthority(User user) {
+        String roleCode = user.getRole() != null ? user.getRole().getCode() : RoleConstants.ROLE_EMPLOYEE;
+        return "ROLE_" + roleCode.toUpperCase();
     }
 
     private User createNewGoogleUser(String email, String googleId, String name, String picture) {

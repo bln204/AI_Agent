@@ -39,7 +39,16 @@ public class HybridRetrievalService {
         log.info("[HYBRID] Applied Metadata Filter: {}", finalFilter);
 
         List<Document> results = vectorStoreService.search(question, finalFilter);
-        
+
+        if (entityFilter != null && (results == null || results.isEmpty())) {
+            // The entity/row filter narrowed the search to zero matches — e.g. an
+            // extracted candidate isn't actually present in any chunk's metadata.
+            // Fall back to pure semantic search under the security filter alone
+            // instead of returning nothing.
+            log.info("[HYBRID] Entity filter returned 0 results — falling back to Pure Semantic Search with Security Filter");
+            results = vectorStoreService.search(question, securityFilter);
+        }
+
         int resultCount = (results != null) ? results.size() : 0;
         
         log.info("[HYBRID] Metadata Search Result Count: {}", (entityFilter != null ? resultCount : "N/A"));
