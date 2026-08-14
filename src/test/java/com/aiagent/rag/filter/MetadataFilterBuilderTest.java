@@ -37,6 +37,24 @@ class MetadataFilterBuilderTest {
     }
 
     @Test
+    void employeeEntity_matchesBothUploaderNameAndRowContent() {
+        // A candidate can verify as EMPLOYEE either because it's a real system
+        // username, or because it coincidentally collides with one (e.g. DB
+        // collation) while actually being a person's name inside an ingested
+        // row (XlsxChunker's row_values) — the filter must not assume only
+        // "user_name" (the document uploader) was meant.
+        Filter.Expression expr = builder.build(List.of(new DetectedEntity(EntityType.EMPLOYEE, "Bùi Lê Nam")));
+
+        assertNotNull(expr);
+        assertTrue(expr.toString().contains("user_name"), "filter was: " + expr);
+        assertTrue(expr.toString().contains("row_values"), "filter was: " + expr);
+        // row_values side must be diacritics/case-normalized like XlsxChunker's storage.
+        assertTrue(expr.toString().contains("bui le nam"), "filter was: " + expr);
+        // user_name side must keep the original text (that field isn't normalized).
+        assertTrue(expr.toString().contains("Bùi Lê Nam"), "filter was: " + expr);
+    }
+
+    @Test
     void noEntities_returnsNullFilter() {
         assertNull(builder.build(List.of()));
         assertNull(builder.build(null));

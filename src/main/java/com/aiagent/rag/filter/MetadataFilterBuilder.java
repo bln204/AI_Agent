@@ -22,20 +22,41 @@ public class MetadataFilterBuilder {
         Filter.Expression combined = null;
 
         for (DetectedEntity entity : entities) {
-            String metadataKey = mapToMetadataKey(entity.getType());
-            if (metadataKey == null) continue;
+            Filter.Expression current;
 
-            // ROW_VALUE metadata (XlsxChunker) is stored via
-            // NormalizationUtils.normalizeForMatching (lowercase + diacritics
-            // stripped) for case/diacritics-insensitive lookup — normalize
-            // the query-side value the same way so e.g. "Nguyễn Văn 11" still
-            // matches a cell stored as "Nguyen Van 11".
-            String filterValue = (entity.getType() == EntityType.ROW_VALUE)
-                    ? com.aiagent.util.NormalizationUtils.normalizeForMatching(entity.getValue())
-                    : entity.getValue();
+            if (entity.getType() == EntityType.EMPLOYEE) {
+                // A candidate can verify as EMPLOYEE either because it matches a
+                // real system username, or — MySQL's default collation is often
+                // accent/case-insensitive — because it coincidentally collides
+                // with one. But the same text is just as likely to be a person's
+                // name mentioned INSIDE an ingested row (e.g. an XLSX employee
+                // list), which lives in a different metadata field (row_values,
+                // set by XlsxChunker) than "who uploaded this document"
+                // (user_name). Match both instead of assuming user_name is the
+                // intended meaning — the security filter is still AND-ed on top,
+                // and HybridRetrievalService already falls back to pure semantic
+                // if this ends up matching nothing, so widening this can only
+                // find more of what the user meant, never leak anything.
+                String normalized = com.aiagent.util.NormalizationUtils.normalizeForMatching(entity.getValue());
+                current = new Filter.Expression(Filter.ExpressionType.OR,
+                        b.eq("user_name", entity.getValue()).build(),
+                        b.eq("row_values", normalized).build());
+            } else {
+                String metadataKey = mapToMetadataKey(entity.getType());
+                if (metadataKey == null) continue;
 
-            Filter.Expression current = b.eq(metadataKey, filterValue).build();
-            
+                // ROW_VALUE metadata (XlsxChunker) is stored via
+                // NormalizationUtils.normalizeForMatching (lowercase + diacritics
+                // stripped) for case/diacritics-insensitive lookup — normalize
+                // the query-side value the same way so e.g. "Nguyễn Văn 11" still
+                // matches a cell stored as "Nguyen Van 11".
+                String filterValue = (entity.getType() == EntityType.ROW_VALUE)
+                        ? com.aiagent.util.NormalizationUtils.normalizeForMatching(entity.getValue())
+                        : entity.getValue();
+
+                current = b.eq(metadataKey, filterValue).build();
+            }
+
             if (combined == null) {
                 combined = current;
             } else {

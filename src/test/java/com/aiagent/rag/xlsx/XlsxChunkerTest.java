@@ -85,6 +85,42 @@ class XlsxChunkerTest {
     }
 
     @Test
+    void chunk_rowValues_includeAdjacentColumnConcatenation_forSplitNameColumns() {
+        // Vietnamese HR spreadsheets commonly split a person's full name across
+        // adjacent columns ("Họ" + "Tên"), so the full name never appears in any
+        // single cell — a question naming "Le Minh Tuan" must still be able to
+        // exact-match this row via a concatenation of the adjacent cells.
+        XlsxSheetData sheet = new XlsxSheetData("Employees",
+                List.of("STT", "MaNV", "Ho", "Ten", "ViTri"),
+                List.of(List.of("1", "MS.001", "Le Minh", "Tuan", "Truong phong")));
+
+        List<Document> chunks = XlsxChunker.chunk(List.of(sheet));
+
+        String[] values = (String[]) chunks.get(0).getMetadata().get("row_values");
+        List<String> valueList = Arrays.asList(values);
+
+        assertTrue(valueList.contains("le minh"), "individual cell must still be present: " + valueList);
+        assertTrue(valueList.contains("tuan"), "individual cell must still be present: " + valueList);
+        assertTrue(valueList.contains("le minh tuan"),
+                "adjacent-column concatenation must cover the split full name: " + valueList);
+    }
+
+    @Test
+    void chunk_rowValues_threeColumnNameSplit_alsoConcatenated() {
+        XlsxSheetData sheet = new XlsxSheetData("Employees",
+                List.of("Ho", "TenDem", "Ten"),
+                List.of(List.of("Bui", "Le", "Nam")));
+
+        List<Document> chunks = XlsxChunker.chunk(List.of(sheet));
+
+        String[] values = (String[]) chunks.get(0).getMetadata().get("row_values");
+        List<String> valueList = Arrays.asList(values);
+
+        assertTrue(valueList.contains("bui le nam"),
+                "3-column concatenation must cover a 3-way split full name: " + valueList);
+    }
+
+    @Test
     void chunk_emptyCellsExcludedFromRowValues() {
         XlsxSheetData sheet = new XlsxSheetData("Employees", List.of("ID", "Note"),
                 List.of(List.of("NV0001", "")));

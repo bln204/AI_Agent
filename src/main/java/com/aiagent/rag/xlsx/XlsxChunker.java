@@ -102,11 +102,38 @@ public final class XlsxChunker {
                     values.add(com.aiagent.util.NormalizationUtils.normalizeForMatching(v));
                 }
             }
+            addAdjacentCellConcatenations(row, values);
         }
         if (!values.isEmpty()) {
             metadata.put("row_values", values.toArray(new String[0]));
         }
 
         return new Document(content.trim(), metadata);
+    }
+
+    // Vietnamese HR spreadsheets commonly split a person's full name across
+    // adjacent columns (e.g. "Họ" + "Tên", or "Họ" + "Tên đệm" + "Tên"), so a
+    // question mentioning the full name (e.g. "Lê Minh Tuấn") would never
+    // exact-match any single cell. Concatenating 2- and 3-column sliding
+    // windows of ADJACENT cells covers that without assuming which columns
+    // hold a name — purely mechanical, not tied to any specific column name.
+    private static void addAdjacentCellConcatenations(List<String> row, Set<String> values) {
+        for (int windowSize = 2; windowSize <= 3 && windowSize <= row.size(); windowSize++) {
+            for (int start = 0; start + windowSize <= row.size(); start++) {
+                StringBuilder concat = new StringBuilder();
+                for (int i = start; i < start + windowSize; i++) {
+                    String cell = row.get(i);
+                    if (cell != null && !cell.isBlank()) {
+                        if (concat.length() > 0) {
+                            concat.append(' ');
+                        }
+                        concat.append(cell.trim());
+                    }
+                }
+                if (concat.length() > 0) {
+                    values.add(com.aiagent.util.NormalizationUtils.normalizeForMatching(concat.toString()));
+                }
+            }
+        }
     }
 }
