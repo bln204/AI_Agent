@@ -33,8 +33,13 @@ public class MaintenanceController {
         log.info("[MAINTENANCE] Re-index into collection '{}' triggered by: {}",
                 collectionName, authentication != null ? authentication.getName() : "UNKNOWN");
         
-        List<Document> documents = documentRepository.findAll();
-        log.info("[MAINTENANCE] Found {} documents to re-index.", documents.size());
+        // Must stay in sync with the approval gate in DocumentService: a
+        // PENDING_APPROVAL/REJECTED document must never reach Qdrant, and a
+        // manual reindex is exactly the kind of "second path" that could leak
+        // one in if it used findAll() here instead of the status-filtered
+        // query DocumentRepository already exposes.
+        List<Document> documents = documentRepository.findAllForReindexing();
+        log.info("[MAINTENANCE] Found {} APPROVED documents to re-index.", documents.size());
 
         int count = 0;
         for (Document doc : documents) {

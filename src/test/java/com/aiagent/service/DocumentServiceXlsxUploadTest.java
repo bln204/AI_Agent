@@ -54,6 +54,7 @@ class DocumentServiceXlsxUploadTest {
     private DecisionNumberService decisionNumberService;
     private DocumentDuplicateDetectionService documentDuplicateDetectionService;
     private DocumentViewerConversionService documentViewerConversionService;
+    private NotificationService notificationService;
 
     private DocumentService documentService;
 
@@ -68,10 +69,11 @@ class DocumentServiceXlsxUploadTest {
         decisionNumberService = mock(DecisionNumberService.class);
         documentDuplicateDetectionService = mock(DocumentDuplicateDetectionService.class);
         documentViewerConversionService = mock(DocumentViewerConversionService.class);
+        notificationService = mock(NotificationService.class);
 
         documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
-                projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService,
-                documentDuplicateDetectionService);
+                projectRepository, documentAccessService, documentViewerConversionService, notificationService,
+                decisionNumberService, documentDuplicateDetectionService);
         ReflectionTestUtils.setField(documentService, "uploadDir", tempDir.toString());
         ReflectionTestUtils.setField(documentService, "maxUploadSizeMb", 50L);
 
@@ -87,13 +89,20 @@ class DocumentServiceXlsxUploadTest {
         });
     }
 
-    private User manager() {
+    // Uploader is DIRECTOR (not MANAGER) so the document is APPROVED
+    // immediately and ingestPreExtracted actually fires — this test is about
+    // xlsx chunking structure, not the approval gate (a MANAGER upload would
+    // now be PENDING_APPROVAL and ingestion would correctly be skipped,
+    // which would make the verify() calls below fail for an unrelated
+    // reason). The approval gate itself is covered by
+    // DocumentServiceApprovalTest.
+    private User director() {
         Role role = new Role();
-        role.setCode(RoleConstants.ROLE_MANAGER);
+        role.setCode(RoleConstants.ROLE_DIRECTOR);
         User user = new User();
         user.setId(1L);
-        user.setUsername("manager");
-        user.setEmail("manager@company.com");
+        user.setUsername("director");
+        user.setEmail("director@company.com");
         user.setRole(role);
         return user;
     }
@@ -121,7 +130,7 @@ class DocumentServiceXlsxUploadTest {
         MockMultipartFile file = buildXlsxFile("employees.xlsx");
 
         documentService.uploadDocument("Employees", null, List.of(), List.of(), AccessLevel.PUBLIC, null,
-                DocumentClassification.OTHER, null, "desc", true, file, manager());
+                DocumentClassification.OTHER, null, "desc", true, file, director());
 
         ArgumentCaptor<List<org.springframework.ai.document.Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(documentIngestionService).ingestPreExtracted(
@@ -143,7 +152,7 @@ class DocumentServiceXlsxUploadTest {
                 "Cong ty AI Agent xin chao toan the nhan vien.".getBytes());
 
         documentService.uploadDocument("Notes", null, List.of(), List.of(), AccessLevel.PUBLIC, null,
-                DocumentClassification.OTHER, null, "desc", true, file, manager());
+                DocumentClassification.OTHER, null, "desc", true, file, director());
 
         ArgumentCaptor<List<org.springframework.ai.document.Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(documentIngestionService).ingestPreExtracted(

@@ -36,7 +36,7 @@
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14 2 14 8 20 8"/>
                 </svg>
-                <span>Tài Liệu</span>
+                <span>Công Văn Hội Sở</span>
             </a>
 
             <a href="/projects" class="nav-item">
@@ -105,13 +105,30 @@
                     <div class="form-group">
                         <label for="accessLevel">Quyền truy cập</label>
                         <select id="accessLevel" name="accessLevel" class="form-control">
-                            <option th:each="level : ${accessLevels}" 
-                                    th:value="${level}" 
-                                    th:text="${level == T(com.aiagent.model.AccessLevel).PUBLIC ? ' Công khai toàn công ty' : 
-                                             (level == T(com.aiagent.model.AccessLevel).DEPARTMENT ? ' Nội bộ phòng ban' : 
-                                             (level == T(com.aiagent.model.AccessLevel).PROJECT ? ' Theo dự án' : ' Riêng tư'))}">
+                            <option th:each="level : ${accessLevels}"
+                                    th:value="${level}"
+                                    th:text="${level == T(com.aiagent.model.AccessLevel).PUBLIC ? ' Công khai toàn công ty' :
+                                             (level == T(com.aiagent.model.AccessLevel).DEPARTMENT ? ' Nội bộ phòng ban' :
+                                             ' Theo dự án')}">
                             </option>
                         </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="classification">Loại tài liệu</label>
+                        <select id="classification" name="classification" class="form-control">
+                            <option th:each="type : ${classifications}"
+                                    th:value="${type}"
+                                    th:selected="${type == T(com.aiagent.model.DocumentClassification).OTHER}"
+                                    th:text="${type == T(com.aiagent.model.DocumentClassification).INTERNAL_POLICY ? '📋 Chính sách nội bộ' :
+                                             (type == T(com.aiagent.model.DocumentClassification).PROJECT_DOCUMENT ? '📁 Tài liệu dự án' :
+                                             (type == T(com.aiagent.model.DocumentClassification).DECISION_DOCUMENT ? '📜 Quyết định' :
+                                             (type == T(com.aiagent.model.DocumentClassification).REPORT ? '📊 Báo cáo' :
+                                             (type == T(com.aiagent.model.DocumentClassification).TECHNICAL_DOCUMENT ? '🔧 Tài liệu kỹ thuật' :
+                                             (type == T(com.aiagent.model.DocumentClassification).REQUEST_FORM ? '📝 Đơn từ' : '📦 Khác')))))}">
+                            </option>
+                        </select>
+                        <p class="manager-note">Dùng để lọc trong "Công Văn Hội Sở" — chọn "Đơn từ" cho đơn xin nghỉ phép, chuyển công tác, v.v.</p>
                     </div>
                 </div>
 

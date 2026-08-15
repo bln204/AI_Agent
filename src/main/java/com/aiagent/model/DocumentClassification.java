@@ -6,6 +6,7 @@ public enum DocumentClassification {
     DECISION_DOCUMENT("Decision Document"),
     REPORT("Report"),
     TECHNICAL_DOCUMENT("Technical Document"),
+    REQUEST_FORM("Đơn từ"),
     OTHER("Other");
 
     private final String displayName;

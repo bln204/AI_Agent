@@ -7,6 +7,18 @@
             <p th:if="${subtitle != null}" class="text-sm text-slate-500 mt-0.5" th:text="${subtitle}">Phụ đề</p>
         </div>
         <div class="flex items-center gap-4">
+            <!-- Notifications (decision #8: DB-persisted + polling) -->
+            <div th:if="${currentUser != null}" class="notif-wrapper">
+                <button id="notifBellBtn" class="notif-bell-btn" type="button" title="Thông báo">
+                    🔔
+                    <span id="notifBadge" class="notif-badge" style="display:none;">0</span>
+                </button>
+                <div id="notifDropdown" class="notif-dropdown" style="display:none;">
+                    <div class="notif-dropdown-header">Thông báo</div>
+                    <div id="notifList" class="notif-list"></div>
+                </div>
+            </div>
+
             <!-- User Profile Quick View -->
             <div th:if="${currentUser != null}" class="flex items-center gap-3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full">
                 <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-200">

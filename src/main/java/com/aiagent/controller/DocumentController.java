@@ -7,6 +7,7 @@ import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.service.DocumentService;
 import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -38,20 +39,32 @@ public class DocumentController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "view", required = false, defaultValue = "approved") String view,
             Authentication authentication, Model model, RedirectAttributes redirectAttributes) {
         User user = resolveUser(authentication);
         if (user == null) return "redirect:/login";
-        
+
         if (size <= 0) size = 10;
         if (page < 0) page = 0;
-        
+
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<Document> documentPage = documentService.getAccessibleDocumentsPaginated(user, keyword, pageable);
-        
+
+        // "Công Văn Hội Sở" tabs: approved (default, keyword search available),
+        // pending (chờ duyệt), rejected — see decision #2/#4/#7.
+        Page<Document> documentPage;
+        if ("pending".equals(view)) {
+            documentPage = documentService.getDocumentsByStatus(user, com.aiagent.model.DocumentStatus.PENDING_APPROVAL, pageable);
+        } else if ("rejected".equals(view)) {
+            documentPage = documentService.getDocumentsByStatus(user, com.aiagent.model.DocumentStatus.REJECTED, pageable);
+        } else {
+            documentPage = documentService.getAccessibleDocumentsPaginated(user, keyword, pageable);
+        }
+
         model.addAttribute("documents", documentPage.getContent());
         model.addAttribute("documentPage", documentPage);
         model.addAttribute("keyword", keyword);
         model.addAttribute("pageSize", size);
+        model.addAttribute("view", view);
         model.addAttribute("currentUser", user);
         return "documents";
     }
@@ -68,7 +81,8 @@ public class DocumentController {
 
         model.addAttribute("currentUser", user);
         model.addAttribute("accessLevels", com.aiagent.model.AccessLevel.values());
-        
+        model.addAttribute("classifications", com.aiagent.model.DocumentClassification.values());
+
         String roleCode = user.getRole().getCode();
         if (RoleConstants.ROLE_MANAGER.equals(roleCode)) {
             model.addAttribute("departments", List.of(user.getDepartment()));
@@ -157,6 +171,32 @@ public class DocumentController {
             redirectAttributes.addFlashAttribute("error", "Lỗi khi xoá tài liệu: " + e.getMessage());
         }
         return "redirect:/documents";
+    }
+
+    @PostMapping("/documents/{id}/approve")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    public String approveDocument(@PathVariable Long id, Authentication authentication, RedirectAttributes redirectAttributes) {
+        User user = resolveUser(authentication);
+        try {
+            documentService.approveDocument(id, user);
+            redirectAttributes.addFlashAttribute("success", "Đã duyệt tài liệu thành công!");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", "Lỗi khi duyệt tài liệu: " + e.getMessage());
+        }
+        return "redirect:/documents?view=pending";
+    }
+
+    @PostMapping("/documents/{id}/reject")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    public String rejectDocument(@PathVariable Long id, Authentication authentication, RedirectAttributes redirectAttributes) {
+        User user = resolveUser(authentication);
+        try {
+            documentService.rejectDocument(id, user);
+            redirectAttributes.addFlashAttribute("success", "Đã từ chối tài liệu.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", "Lỗi khi từ chối tài liệu: " + e.getMessage());
+        }
+        return "redirect:/documents?view=pending";
     }
 
     private User resolveUser(Authentication authentication) {

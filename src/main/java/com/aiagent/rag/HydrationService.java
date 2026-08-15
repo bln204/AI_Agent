@@ -73,6 +73,13 @@ public class HydrationService {
             log.warn("[HYDRATION] Version drift for doc {}: Vector={}, DB={}", id, vectorVersion, meta.getVersion());
         }
 
+        // Also the approval-lifecycle defense-in-depth check: canAccessDocument
+        // denies PENDING_APPROVAL/REJECTED documents to anyone but the
+        // DIRECTOR/uploader. Those documents should never reach Qdrant at all
+        // (the gate is in DocumentService.uploadDocument/approveDocument), so
+        // this only matters if that gate is ever bypassed by a future bug —
+        // but since it's live DB state re-checked on every query, it closes
+        // that gap for free without a separate status check here.
         if (!documentAccessService.canAccessDocument(user, meta)) {
             log.warn("[HYDRATION] Access denied for doc {} for user {}", id, user.getEmail());
             return new ValidatedChunk(chunk, Status.ORPHAN);

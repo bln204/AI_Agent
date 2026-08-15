@@ -3,6 +3,7 @@ package com.aiagent.service;
 import com.aiagent.exception.DocumentDuplicateException;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentDuplicateType;
+import com.aiagent.model.DocumentStatus;
 import com.aiagent.model.User;
 import com.aiagent.rag.SemanticDuplicateDetectionService;
 import com.aiagent.repository.DocumentRepository;
@@ -62,11 +63,20 @@ public class DocumentDuplicateDetectionService {
         return toHex(digest.digest(normalizedText.getBytes(StandardCharsets.UTF_8)));
     }
 
+    /**
+     * Only matches against APPROVED documents: neither PENDING_APPROVAL nor
+     * REJECTED blocks a (re-)submission -- a Manager may freely upload the
+     * same file/content again while an earlier submission is still awaiting
+     * a decision (there is no "edit while pending" flow; re-upload is the
+     * only way to change it), and a rejection doesn't permanently reserve
+     * the file/content hash either. Once a document is APPROVED, duplicates
+     * against it are blocked as before.
+     */
     public void checkFileDuplicate(String fileHash, User uploader) {
         if (!duplicateDetectionEnabled || fileHash == null) {
             return;
         }
-        documentRepository.findByFileHashAndIsDeletedFalse(fileHash)
+        documentRepository.findByFileHashAndIsDeletedFalseAndStatus(fileHash, DocumentStatus.APPROVED)
                 .ifPresent(existing -> {
                     throw buildException(DocumentDuplicateType.DUPLICATE_FILE, existing, uploader);
                 });
@@ -76,7 +86,7 @@ public class DocumentDuplicateDetectionService {
         if (!duplicateDetectionEnabled || contentHash == null) {
             return;
         }
-        documentRepository.findByContentHashAndIsDeletedFalse(contentHash)
+        documentRepository.findByContentHashAndIsDeletedFalseAndStatus(contentHash, DocumentStatus.APPROVED)
                 .ifPresent(existing -> {
                     throw buildException(DocumentDuplicateType.DUPLICATE_CONTENT, existing, uploader);
                 });
