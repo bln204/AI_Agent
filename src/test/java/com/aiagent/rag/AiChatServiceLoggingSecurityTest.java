@@ -6,6 +6,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.aiagent.model.User;
 import com.aiagent.rag.analyzer.MetadataVerificationService;
 import com.aiagent.rag.analyzer.QueryAnalyzer;
+import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.service.DocumentAccessService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,8 @@ class AiChatServiceLoggingSecurityTest {
     private QueryAnalyzer queryAnalyzer;
     @Mock
     private MetadataVerificationService metadataVerificationService;
+    @Mock
+    private DepartmentRepository departmentRepository;
 
     private AiChatService aiChatService;
     private ListAppender<ILoggingEvent> appender;
@@ -46,7 +49,7 @@ class AiChatServiceLoggingSecurityTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        aiChatService = new AiChatService(ragService, documentAccessService, queryAnalyzer, metadataVerificationService);
+        aiChatService = new AiChatService(ragService, documentAccessService, queryAnalyzer, metadataVerificationService, departmentRepository);
 
         logger = (Logger) LoggerFactory.getLogger(AiChatService.class);
         appender = new ListAppender<>();
