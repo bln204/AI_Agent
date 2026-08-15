@@ -107,35 +107,64 @@
                         <select id="accessLevel" name="accessLevel" class="form-control">
                             <option th:each="level : ${accessLevels}" 
                                     th:value="${level}" 
-                                    th:text="${level == T(com.aiagent.model.AccessLevel).PUBLIC ? '🌐 Công khai toàn công ty' : 
-                                             (level == T(com.aiagent.model.AccessLevel).DEPARTMENT ? '🏢 Nội bộ phòng ban' : 
-                                             (level == T(com.aiagent.model.AccessLevel).PROJECT ? '📂 Theo dự án' : '🔒 Riêng tư'))}">
+                                    th:text="${level == T(com.aiagent.model.AccessLevel).PUBLIC ? ' Công khai toàn công ty' : 
+                                             (level == T(com.aiagent.model.AccessLevel).DEPARTMENT ? ' Nội bộ phòng ban' : 
+                                             (level == T(com.aiagent.model.AccessLevel).PROJECT ? ' Theo dự án' : ' Riêng tư'))}">
                             </option>
                         </select>
                     </div>
                 </div>
 
                 <div id="departmentSection" class="form-group" style="display:none;">
-                    <label for="departmentIds">Chọn Phòng ban</label>
-                    <select id="departmentIds" name="departmentIds" class="form-control" multiple>
-                        <option th:each="dept : ${departments}"
-                                th:value="${dept.id}"
-                                th:text="${dept.name}"
-                                th:selected="${currentUser.department != null and dept.id == currentUser.department.id}">
-                        </option>
-                    </select>
-                    <p class="manager-note">Giữ Ctrl (Cmd) để chọn nhiều phòng ban.</p>
+                    <label>Chọn Phòng ban</label>
+
+                    <div class="checkbox-list single-select-group"
+                         th:if="${currentUser.role.code == 'DIRECTOR'}">
+                        <label class="checkbox-item" th:each="dept : ${departments}">
+                            <input type="checkbox"
+                                   name="departmentIds"
+                                   class="single-select-checkbox"
+                                   th:value="${dept.id}">
+                            <span th:text="${dept.name}"></span>
+                        </label>
+                    </div>
+                    <p class="manager-note" th:if="${currentUser.role.code == 'DIRECTOR'}">Chỉ chọn 1 phòng ban để tải tài liệu lên.</p>
+
+                    <div class="locked-scope" th:if="${currentUser.role.code == 'MANAGER'}">
+                        <span class="locked-scope-icon"></span>
+                        <span class="locked-scope-value"
+                              th:text="${currentUser.department != null ? currentUser.department.name : 'Chưa được gán phòng ban'}"></span>
+                        <input type="hidden"
+                               name="departmentIds"
+                               th:if="${currentUser.department != null}"
+                               th:value="${currentUser.department.id}">
+                    </div>
+                    <p class="manager-note" th:if="${currentUser.role.code == 'MANAGER'}">Tài liệu sẽ tự động thuộc phòng ban của bạn.</p>
                 </div>
 
                 <div id="projectSection" class="form-group" style="display:none;">
-                    <label for="projectIds">Chọn Dự án</label>
-                    <select id="projectIds" name="projectIds" class="form-control" multiple>
+                    <label>Chọn Dự án</label>
+
+                    <div class="checkbox-list single-select-group"
+                         th:if="${currentUser.role.code == 'DIRECTOR'}">
+                        <label class="checkbox-item" th:each="proj : ${projects}">
+                            <input type="checkbox"
+                                   name="projectIds"
+                                   class="single-select-checkbox"
+                                   th:value="${proj.id}">
+                            <span th:text="${proj.name}"></span>
+                        </label>
+                    </div>
+                    <p class="manager-note" th:if="${currentUser.role.code == 'DIRECTOR'}">Chỉ chọn 1 dự án để tải tài liệu lên.</p>
+
+                    <select id="projectIds" name="projectIds" class="form-control" multiple
+                            th:if="${currentUser.role.code != 'DIRECTOR'}">
                         <option th:each="proj : ${projects}"
                                 th:value="${proj.id}"
                                 th:text="${proj.name}">
                         </option>
                     </select>
-                    <p class="manager-note">Tài liệu sẽ thuộc về các dự án đã chọn.</p>
+                    <p class="manager-note" th:if="${currentUser.role.code != 'DIRECTOR'}">Giữ Ctrl (Cmd) để chọn nhiều dự án.</p>
                 </div>
 
                 <div class="form-group">

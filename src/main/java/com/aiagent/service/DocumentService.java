@@ -181,8 +181,17 @@ public class DocumentService {
             }
 
             if (departmentIds != null && !departmentIds.isEmpty()) {
-                doc.setDepartments(new java.util.HashSet<>(departmentRepository.findAllById(departmentIds)));
-                doc.setDepartmentName(departmentRepository.findById(departmentIds.get(0)).map(com.aiagent.model.Department::getName).orElse("UNKNOWN"));
+                List<com.aiagent.model.Department> resolvedDepartments = departmentRepository.findAllById(departmentIds);
+                if (resolvedDepartments.stream().anyMatch(dept -> "ALL".equals(dept.getCode()))) {
+                    throw new IllegalArgumentException("Không được chọn phòng ban 'Tất cả' cho tài liệu phạm vi Phòng ban.");
+                }
+
+                Long primaryDepartmentId = departmentIds.get(0);
+                doc.setDepartments(new java.util.HashSet<>(resolvedDepartments));
+                doc.setDepartmentName(resolvedDepartments.stream()
+                        .filter(dept -> dept.getId().equals(primaryDepartmentId))
+                        .findFirst()
+                        .map(com.aiagent.model.Department::getName).orElse("UNKNOWN"));
             }
         } else if (AccessLevel.PROJECT.equals(accessLevel)) {
             doc.setDepartments(new java.util.HashSet<>());

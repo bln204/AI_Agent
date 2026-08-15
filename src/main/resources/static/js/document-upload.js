@@ -231,6 +231,23 @@
         }
     }
 
+    function bindSingleSelectCheckboxGroups() {
+        document.querySelectorAll('.single-select-group').forEach(function (group) {
+            group.addEventListener('change', function (event) {
+                const target = event.target;
+                if (!target.classList.contains('single-select-checkbox') || !target.checked) {
+                    return;
+                }
+
+                group.querySelectorAll('.single-select-checkbox').forEach(function (checkbox) {
+                    if (checkbox !== target) {
+                        checkbox.checked = false;
+                    }
+                });
+            });
+        });
+    }
+
     function initDocumentUpload() {
         const form = getElement(SELECTORS.form);
         const dropZone = getElement(SELECTORS.dropZone);
@@ -254,6 +271,7 @@
         bindDropZoneEvents(elements);
         bindFileInputEvents(elements);
         bindAccessLevelEvents();
+        bindSingleSelectCheckboxGroups();
 
         updateFileDisplay(fileInput, fileNameDisplay, dropZone, removeFileBtn);
         toggleAccessFields();

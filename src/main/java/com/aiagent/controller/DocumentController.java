@@ -77,7 +77,9 @@ public class DocumentController {
                     .map(pm -> pm.getProject())
                     .toList());
         } else if (RoleConstants.ROLE_DIRECTOR.equals(roleCode)) {
-            model.addAttribute("departments", departmentRepository.findByActiveTrue());
+            model.addAttribute("departments", departmentRepository.findByActiveTrue().stream()
+                    .filter(dept -> !"ALL".equals(dept.getCode()))
+                    .toList());
             model.addAttribute("projects", projectRepository.findAll());
         }
         
