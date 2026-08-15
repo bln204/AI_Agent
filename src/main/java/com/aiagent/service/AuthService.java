@@ -49,6 +49,14 @@ public class AuthService {
     private String googleClientId;
 
     public AuthResponse register(RegisterRequest registerRequest) {
+        String passwordError = validatePasswordStrength(registerRequest.getPassword());
+        if (passwordError != null) {
+            return AuthResponse.builder()
+                    .success(false)
+                    .message(passwordError)
+                    .build();
+        }
+
         // Check if user already exists
         Optional<User> existingUser = userRepository.findByEmail(registerRequest.getEmail());
         if (existingUser.isPresent()) {
@@ -91,6 +99,41 @@ public class AuthService {
                 .success(true)
                 .message("Đăng ký thành công! Vui lòng đăng nhập.")
                 .build();
+    }
+
+    private static final int PASSWORD_MIN_LENGTH = 8;
+
+    /**
+     * Kiểm tra tất cả các điều kiện mật khẩu mạnh (không dừng ở điều kiện đầu
+     * tiên bị sai) để trả về đúng những gì còn thiếu, giúp người dùng sửa một
+     * lần thay vì thử-sai nhiều lượt.
+     */
+    private String validatePasswordStrength(String password) {
+        if (password == null || password.isEmpty()) {
+            return "Mật khẩu không được để trống.";
+        }
+
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        if (password.length() < PASSWORD_MIN_LENGTH) {
+            missing.add("tối thiểu " + PASSWORD_MIN_LENGTH + " ký tự");
+        }
+        if (!password.matches(".*[a-z].*")) {
+            missing.add("chữ thường (a-z)");
+        }
+        if (!password.matches(".*[A-Z].*")) {
+            missing.add("chữ hoa (A-Z)");
+        }
+        if (!password.matches(".*[0-9].*")) {
+            missing.add("chữ số (0-9)");
+        }
+        if (!password.matches(".*[^A-Za-z0-9].*")) {
+            missing.add("ký tự đặc biệt (!@#$%...)");
+        }
+
+        if (missing.isEmpty()) {
+            return null;
+        }
+        return "Mật khẩu chưa đủ mạnh. Cần có: " + String.join(", ", missing) + ".";
     }
 
     private static final String INVALID_CREDENTIALS_MESSAGE = "Email hoặc mật khẩu không hợp lệ.";

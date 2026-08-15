@@ -158,6 +158,59 @@ html, body, #root {
     text-decoration: underline;
 }
 
+.phone-input-group {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.phone-input-group:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.phone-input-group.invalid {
+    border-color: var(--error-color);
+}
+
+.phone-prefix {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 10px;
+    background-color: var(--bg-tertiary);
+    white-space: nowrap;
+}
+
+.phone-prefix .flag-icon {
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.phone-prefix .dial-code {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.phone-divider {
+    width: 1px;
+    align-self: stretch;
+    background-color: var(--border-color);
+}
+
+.phone-input-group input[type="tel"] {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+}
+
 .error {
     color: var(--error-color);
     font-size: 12px;
