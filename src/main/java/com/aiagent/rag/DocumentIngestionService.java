@@ -16,6 +16,10 @@ import java.util.stream.Collectors;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import com.aiagent.rag.xlsx.XlsxChunker;
+import com.aiagent.rag.xlsx.XlsxDocumentReader;
+import com.aiagent.rag.xlsx.XlsxSheetData;
+import com.aiagent.rag.xlsx.XlsxStructuredTextBuilder;
 import com.aiagent.repository.DocumentRepository;
 import org.springframework.scheduling.annotation.Async;
 
@@ -61,30 +65,56 @@ public class DocumentIngestionService {
             log.info("File Path: {} | User ID: {} | Document ID: {}", filePath, userId, documentId);
             log.info("Metadata: accessLevel={}, departmentIds={}, projectIds={}", accessLevel, departmentIds, projectIds);
 
-            // Đọc file bằng Tika
-            log.info("[1/3] Đang dùng Tika để Extract nội dung tử file gốc...");
-            TikaDocumentReader reader = new TikaDocumentReader(resource);
-            List<Document> documents = reader.read();
+            List<org.springframework.ai.document.Document> splitDocuments;
 
-            if (documents.isEmpty() || documents.get(0).getContent() == null || documents.get(0).getContent().trim().isEmpty()) {
-                log.warn("❌ CẢNH BÁO: File PDF/Doc không có TEXT (có thể là file scan hoặc rỗng) cho Doc ID: {}. SKIP INDEXING.", documentId);
-                return;
+            if ("xlsx".equalsIgnoreCase(fileType)) {
+                // XLSX: đọc bằng Apache POI (giữ ngữ nghĩa bảng) thay vì Tika,
+                // để chunk giữ được sheet/column thay vì bị dump phẳng.
+                log.info("[1/3][XLSX-INGEST] Đang đọc workbook bằng Apache POI...");
+                List<XlsxSheetData> sheets;
+                try (java.io.InputStream in = new java.io.FileInputStream(actualFile)) {
+                    sheets = new XlsxDocumentReader().readSheets(in);
+                }
+
+                if (sheets.isEmpty()) {
+                    log.warn("❌ CẢNH BÁO: File XLSX không có dữ liệu hợp lệ (mọi sheet rỗng) cho Doc ID: {}. SKIP INDEXING.", documentId);
+                    return;
+                }
+                log.info("[XLSX-INGEST] file={} sheets={}", actualFile.getName(), sheets.size());
+
+                String normalizedContent = com.aiagent.util.NormalizationUtils.normalize(XlsxStructuredTextBuilder.buildFullText(sheets));
+                log.info("=> XLSX Extract thành công! Chiều dài: ~{} ký tự (sau chuẩn hóa NFC)", normalizedContent.length());
+                updateDbContent(documentId, normalizedContent);
+
+                log.info("[2/3][XLSX-INGEST] Thực hiện cắt Chunk theo sheet/row (giữ header)...");
+                splitDocuments = XlsxChunker.chunk(sheets);
+                log.info("=> File được cắt thành {} chunks.", splitDocuments.size());
+            } else {
+                // Đọc file bằng Tika
+                log.info("[1/3] Đang dùng Tika để Extract nội dung tử file gốc...");
+                TikaDocumentReader reader = new TikaDocumentReader(resource);
+                List<Document> documents = reader.read();
+
+                if (documents.isEmpty() || documents.get(0).getContent() == null || documents.get(0).getContent().trim().isEmpty()) {
+                    log.warn("❌ CẢNH BÁO: File PDF/Doc không có TEXT (có thể là file scan hoặc rỗng) cho Doc ID: {}. SKIP INDEXING.", documentId);
+                    return;
+                }
+
+                String rawContent = documents.get(0).getContent();
+                String normalizedContent = com.aiagent.util.NormalizationUtils.normalize(rawContent);
+                log.info("=> Tika Extract thành công! Chiều dài: ~{} ký tự (sau chuẩn hóa NFC)", normalizedContent.length());
+
+                updateDbContent(documentId, normalizedContent);
+
+                org.springframework.ai.document.Document normalizedDoc =
+                    new org.springframework.ai.document.Document(normalizedContent, documents.get(0).getMetadata());
+                List<org.springframework.ai.document.Document> documentsToSplit = List.of(normalizedDoc);
+                log.info("[2/3] Thực hiện cắt Chunk bằng TokenTextSplitter (800 tokens, 100 overlap)...");
+                TokenTextSplitter splitter = new TokenTextSplitter(800, 100, 5, 10000, true);
+                splitDocuments = splitter.apply(documentsToSplit);
+
+                log.info("=> File được cắt thành {} chunks.", splitDocuments.size());
             }
-
-            String rawContent = documents.get(0).getContent();
-            String normalizedContent = com.aiagent.util.NormalizationUtils.normalize(rawContent);
-            log.info("=> Tika Extract thành công! Chiều dài: ~{} ký tự (sau chuẩn hóa NFC)", normalizedContent.length());
-
-            updateDbContent(documentId, normalizedContent);
-
-            org.springframework.ai.document.Document normalizedDoc =
-                new org.springframework.ai.document.Document(normalizedContent, documents.get(0).getMetadata());
-            List<org.springframework.ai.document.Document> documentsToSplit = List.of(normalizedDoc);
-            log.info("[2/3] Thực hiện cắt Chunk bằng TokenTextSplitter (800 tokens, 100 overlap)...");
-            TokenTextSplitter splitter = new TokenTextSplitter(800, 100, 5, 10000, true);
-            List<org.springframework.ai.document.Document> splitDocuments = splitter.apply(documentsToSplit);
-
-            log.info("=> File được cắt thành {} chunks.", splitDocuments.size());
 
             upsertChunks(splitDocuments, documentId, documentUuid, title, fileType, userId, userName, uploaderRole,
                     department, decisionNumber, classification, projectName, description, internalSourceFlag,
@@ -237,6 +267,9 @@ public class DocumentIngestionService {
             long qdrantElapsed = (System.currentTimeMillis() - qdrantStart);
 
             log.info("✅ THÀNH CÔNG: Upsert {} vectors vào Qdrant mất {}ms.", finalDocuments.size(), qdrantElapsed);
+            if ("xlsx".equals(resolvedFileType)) {
+                log.info("[XLSX-EMBEDDING] file={} chunks={} embedded={}", resolvedTitle, finalDocuments.size(), finalDocuments.size());
+            }
             log.info("============== DOCUMENT INGESTION PIPELINE SUCCESS ({}s) ==============", elapsedSeconds);
         } catch (io.grpc.StatusRuntimeException grpcException) {
             log.error("❌ LỖI MẠNG QDRANT (gRPC port 6334) khi Upsert document ID {}:", documentId, grpcException);

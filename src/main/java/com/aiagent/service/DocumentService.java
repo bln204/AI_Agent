@@ -7,6 +7,10 @@ import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.repository.DocumentRepository;
 import com.aiagent.repository.ProjectRepository;
 import com.aiagent.rag.DocumentIngestionService;
+import com.aiagent.rag.xlsx.XlsxChunker;
+import com.aiagent.rag.xlsx.XlsxDocumentReader;
+import com.aiagent.rag.xlsx.XlsxSheetData;
+import com.aiagent.rag.xlsx.XlsxStructuredTextBuilder;
 import com.aiagent.util.RoleConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -142,9 +146,20 @@ public class DocumentService {
                 contentHash = documentDuplicateDetectionService.hashText(normalizedFileContent);
                 documentDuplicateDetectionService.checkContentDuplicate(contentHash, uploader);
 
-                TokenTextSplitter splitter = new TokenTextSplitter(800, 100, 5, 10000, true);
-                preSplitChunks = splitter.apply(List.of(
-                        new org.springframework.ai.document.Document(normalizedFileContent, Map.of())));
+                if ("xlsx".equals(fileExtension)) {
+                    // XLSX: chunk theo sheet/row (giữ header mỗi chunk) thay vì
+                    // TokenTextSplitter chung, để không phá ngữ nghĩa bảng.
+                    List<XlsxSheetData> sheets;
+                    try (java.io.InputStream in = file.getInputStream()) {
+                        sheets = new XlsxDocumentReader().readSheets(in);
+                    }
+                    log.info("[XLSX-INGEST] file={} sheets={}", file.getOriginalFilename(), sheets.size());
+                    preSplitChunks = XlsxChunker.chunk(sheets);
+                } else {
+                    TokenTextSplitter splitter = new TokenTextSplitter(800, 100, 5, 10000, true);
+                    preSplitChunks = splitter.apply(List.of(
+                            new org.springframework.ai.document.Document(normalizedFileContent, Map.of())));
+                }
                 documentDuplicateDetectionService.checkSemanticDuplicate(preSplitChunks, uploader);
             } else {
                 log.info("[DUPLICATE-CHECK] File has no extractable text (scanned/unsupported) — content/semantic checks skipped for uploader {}.",
@@ -315,6 +330,17 @@ public class DocumentService {
      */
     private String extractTextSafely(MultipartFile file) {
         try {
+            String extension = getExtension(file.getOriginalFilename()).toLowerCase();
+            if ("xlsx".equals(extension)) {
+                try (java.io.InputStream in = file.getInputStream()) {
+                    List<XlsxSheetData> sheets = new XlsxDocumentReader().readSheets(in);
+                    if (sheets.isEmpty()) {
+                        return null;
+                    }
+                    return XlsxStructuredTextBuilder.buildFullText(sheets);
+                }
+            }
+
             Resource resource = new InputStreamResource(file.getInputStream());
             TikaDocumentReader reader = new TikaDocumentReader(resource);
             List<org.springframework.ai.document.Document> documents = reader.read();
@@ -323,7 +349,7 @@ public class DocumentService {
             }
             return documents.get(0).getContent();
         } catch (Exception e) {
-            log.warn("[DUPLICATE-CHECK] Tika extraction failed during duplicate pre-check (file may be scanned/corrupted/unsupported): {}", e.getMessage());
+            log.warn("[DUPLICATE-CHECK] Text extraction failed during duplicate pre-check (file may be scanned/corrupted/unsupported): {}", e.getMessage());
             return null;
         }
     }

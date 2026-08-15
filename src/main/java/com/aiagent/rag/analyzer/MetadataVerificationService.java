@@ -76,6 +76,16 @@ public class MetadataVerificationService {
             matches.add(new CandidateMatch(val, EntityType.EMPLOYEE, 1.1, "UserRepository(Username)"));
         }
 
+        // Fallback: no SQL table recognizes this candidate as a system entity
+        // (department/project/document/user). It may still be a literal value
+        // inside an ingested row (e.g. an XLSX employee code/name) — keep it as
+        // a low-confidence ROW_VALUE candidate instead of discarding it, so
+        // HybridRetrievalService can still try an exact row-content match.
+        // Lowest score so any real SQL match above always wins for the same value.
+        if (matches.isEmpty()) {
+            matches.add(new CandidateMatch(val, EntityType.ROW_VALUE, 0.5, "RowValueFallback(Unverified)"));
+        }
+
         for (CandidateMatch match : matches) {
             log.info("[CANDIDATE-VERIFY] Candidate: '{}' -> Source: {}, Match: {}, Score: {}", 
                 val, match.getSource(), match.getType(), match.getScore());

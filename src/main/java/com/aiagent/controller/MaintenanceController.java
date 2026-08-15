@@ -79,4 +79,37 @@ public class MaintenanceController {
 
         return ResponseEntity.ok("Started re-indexing " + count + " documents in the background.");
     }
+
+    /**
+     * Removes Qdrant vectors left behind by documents that no longer exist in
+     * the database (e.g. deleted directly, or before deletion always cleaned
+     * up vectors) — HydrationService already detects and drops these
+     * "orphan vector" chunks at query time (RAG security barrier), but they
+     * still consume Top-K search slots before being dropped, crowding out
+     * legitimate results. Guarded to only ever purge an ID that does NOT
+     * exist in the documents table, so a live document's vectors can never
+     * be deleted through this endpoint even if a wrong ID is passed.
+     */
+    @PostMapping("/purge-orphans")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    public ResponseEntity<String> purgeOrphanVectors(
+            @RequestParam List<Long> documentIds,
+            Authentication authentication) {
+        log.info("[MAINTENANCE] Purge orphan vectors for {} document ID(s) triggered by: {}",
+                documentIds.size(), authentication != null ? authentication.getName() : "UNKNOWN");
+
+        int purged = 0;
+        int skipped = 0;
+        for (Long id : documentIds) {
+            if (documentRepository.existsById(id)) {
+                log.warn("[MAINTENANCE] Skipping purge for document ID {} — it still exists in the database.", id);
+                skipped++;
+                continue;
+            }
+            ingestionService.deleteFromVectorStore(id);
+            purged++;
+        }
+
+        return ResponseEntity.ok("Purged vectors for " + purged + " orphaned document ID(s), skipped " + skipped + " still-existing document ID(s).");
+    }
 }
