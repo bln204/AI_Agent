@@ -72,7 +72,7 @@
     <main class="docs-main">
         <div class="docs-header">
             <div>
-                <h1>📤 Tải Lên Tài Liệu</h1>
+                <h1> Tải Lên Tài Liệu</h1>
                 <p class="docs-subtitle">Thêm tài liệu mới vào kho kiến thức</p>
             </div>
         </div>
@@ -120,12 +120,12 @@
                             <option th:each="type : ${classifications}"
                                     th:value="${type}"
                                     th:selected="${type == T(com.aiagent.model.DocumentClassification).OTHER}"
-                                    th:text="${type == T(com.aiagent.model.DocumentClassification).INTERNAL_POLICY ? '📋 Chính sách nội bộ' :
-                                             (type == T(com.aiagent.model.DocumentClassification).PROJECT_DOCUMENT ? '📁 Tài liệu dự án' :
-                                             (type == T(com.aiagent.model.DocumentClassification).DECISION_DOCUMENT ? '📜 Quyết định' :
-                                             (type == T(com.aiagent.model.DocumentClassification).REPORT ? '📊 Báo cáo' :
-                                             (type == T(com.aiagent.model.DocumentClassification).TECHNICAL_DOCUMENT ? '🔧 Tài liệu kỹ thuật' :
-                                             (type == T(com.aiagent.model.DocumentClassification).REQUEST_FORM ? '📝 Đơn từ' : '📦 Khác')))))}">
+                                    th:text="${type == T(com.aiagent.model.DocumentClassification).INTERNAL_POLICY ? ' Chính sách nội bộ' :
+                                             (type == T(com.aiagent.model.DocumentClassification).PROJECT_DOCUMENT ? ' Tài liệu dự án' :
+                                             (type == T(com.aiagent.model.DocumentClassification).DECISION_DOCUMENT ? ' Quyết định' :
+                                             (type == T(com.aiagent.model.DocumentClassification).REPORT ? ' Báo cáo' :
+                                             (type == T(com.aiagent.model.DocumentClassification).TECHNICAL_DOCUMENT ? ' Tài liệu kỹ thuật' :
+                                             (type == T(com.aiagent.model.DocumentClassification).REQUEST_FORM ? ' Đơn từ' : ' Khác')))))}">
                             </option>
                         </select>
                         <p class="manager-note">Dùng để lọc trong "Công Văn Hội Sở" — chọn "Đơn từ" cho đơn xin nghỉ phép, chuyển công tác, v.v.</p>

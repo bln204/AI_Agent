@@ -21,7 +21,7 @@
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <h2 class="text-xl font-bold text-slate-800">Công Văn Hội Sở</h2>
-                    <p class="text-sm text-slate-500" th:if="${currentUser != null}" th:text="${currentUser.department != null ? currentUser.department.name : 'Chưa cập nhật'}">Phòng ban</p>
+                    <p class="text-xl text-slate-500" th:if="${currentUser != null}" th:text="${currentUser.department != null ? currentUser.department.name : 'Chưa cập nhật'}">Phòng ban</p>
                 </div>
                 <div class="flex gap-3 items-center">
                     <form action="/documents" method="get" class="flex gap-2">
