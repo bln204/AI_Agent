@@ -49,16 +49,19 @@ class DocumentServiceTest {
     @Mock
     private com.aiagent.service.DocumentViewerConversionService documentViewerConversionService;
 
+    @Mock
+    private com.aiagent.service.NotificationService notificationService;
+
     private DocumentService documentService;
 
     @BeforeEach
     void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
         // Constructor order (from DocumentService.java): repo, ingestion, dept, proj,
-        // policy, viewerConversion, decisionNumber, duplicateDetection
+        // policy, viewerConversion, notification, decisionNumber, duplicateDetection
         documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
-                projectRepository, documentAccessService, documentViewerConversionService, decisionNumberService,
-                documentDuplicateDetectionService);
+                projectRepository, documentAccessService, documentViewerConversionService, notificationService,
+                decisionNumberService, documentDuplicateDetectionService);
 
         // Fix @Value field
         ReflectionTestUtils.setField(documentService, "uploadDir", "test_uploads");

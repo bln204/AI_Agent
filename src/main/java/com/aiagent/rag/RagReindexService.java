@@ -76,8 +76,10 @@ public class RagReindexService {
                     departmentNames = doc.getUploadedBy().getDepartment().getName();
                 }
                 
-                // Fail-closed: fallback PRIVATE thay vì PUBLIC nếu document thiếu accessLevel.
-                String accessLevel = (doc.getAccessLevel() != null) ? doc.getAccessLevel().name() : "PRIVATE";
+                // Fail-closed: fallback DEPARTMENT (PRIVATE scope removed) thay vì
+                // PUBLIC nếu document thiếu accessLevel — kết hợp với departmentIds
+                // rỗng, ingestDocumentSync's own guard sẽ ABORT thay vì lộ dữ liệu.
+                String accessLevel = (doc.getAccessLevel() != null) ? doc.getAccessLevel().name() : "DEPARTMENT";
 
                 documentIngestionService.ingestDocumentSync(
                         doc.getFilePath(), 

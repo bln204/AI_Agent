@@ -15,5 +15,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByGoogleId(String googleId);
 
     java.util.List<User> findByStatus(String status);
+
+    // Used by NotificationService to fan out "document pending approval"
+    // notifications to every DIRECTOR account.
+    java.util.List<User> findByRole_Code(String roleCode);
 }
 

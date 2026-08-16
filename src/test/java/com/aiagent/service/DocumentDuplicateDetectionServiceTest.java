@@ -4,6 +4,7 @@ import com.aiagent.exception.DocumentDuplicateException;
 import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentDuplicateType;
+import com.aiagent.model.DocumentStatus;
 import com.aiagent.model.Role;
 import com.aiagent.model.User;
 import com.aiagent.rag.SemanticDuplicateDetectionService;
@@ -29,11 +30,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Covers the orchestrator's core contract: exact-match rejection at file and
- * content level, delegation to semantic detection, and — most importantly —
- * that a matched document's identity is only disclosed when the requesting
- * uploader can actually access it (WORKING_RULES §17: no IDOR-style leak of
- * documents outside the requester's permission scope).
+ * Covers the orchestrator's core contract: exact-match rejection against
+ * APPROVED documents only (PENDING_APPROVAL and REJECTED never block a
+ * (re-)submission -- a Manager may freely upload the same file/content again
+ * while an earlier submission is still awaiting a decision, since the
+ * "replace file while pending" flow was removed and re-upload is now the
+ * only way to change it), delegation to semantic detection, and — most
+ * importantly — that a matched document's identity is only disclosed when
+ * the requesting uploader can actually access it (WORKING_RULES §17: no
+ * IDOR-style leak of documents outside the requester's permission scope).
  */
 class DocumentDuplicateDetectionServiceTest {
 
@@ -67,7 +72,11 @@ class DocumentDuplicateDetectionServiceTest {
         Document doc = new Document();
         doc.setId(99L);
         doc.setTitle("Existing Report");
-        doc.setAccessLevel(AccessLevel.PRIVATE);
+        doc.setStatus(DocumentStatus.APPROVED);
+        // Cosmetic fixture value — DocumentAccessService is a @Mock here, so
+        // canAccessDocument's real scope logic never runs (each test stubs
+        // the boolean outcome directly). PRIVATE scope was removed.
+        doc.setAccessLevel(AccessLevel.DEPARTMENT);
         return doc;
     }
 
@@ -93,19 +102,30 @@ class DocumentDuplicateDetectionServiceTest {
         assertEquals(service.hashText("normalized text"), service.hashText("normalized text"));
     }
 
-    // --- Level 1: exact file duplicate ---
+    // --- Level 1: exact file duplicate (matches APPROVED documents only) ---
 
     @Test
     void checkFileDuplicate_noMatch_doesNotThrow() {
-        when(documentRepository.findByFileHashAndIsDeletedFalse("abc")).thenReturn(Optional.empty());
+        when(documentRepository.findByFileHashAndIsDeletedFalseAndStatus("abc", DocumentStatus.APPROVED)).thenReturn(Optional.empty());
         service.checkFileDuplicate("abc", requester());
         // no exception = pass
     }
 
     @Test
+    void checkFileDuplicate_onlyPendingMatchExists_doesNotThrow() {
+        // The repository query itself is scoped to APPROVED only, so a
+        // PENDING_APPROVAL-only match simply never comes back from it —
+        // asserting the no-match behavior here documents that this is by
+        // design (decision: re-upload while pending must not be blocked).
+        when(documentRepository.findByFileHashAndIsDeletedFalseAndStatus("abc", DocumentStatus.APPROVED)).thenReturn(Optional.empty());
+        service.checkFileDuplicate("abc", requester());
+        verifyNoInteractions(documentAccessService);
+    }
+
+    @Test
     void checkFileDuplicate_match_requesterHasAccess_disclosesIdentity() {
         Document existing = existingDocument();
-        when(documentRepository.findByFileHashAndIsDeletedFalse("abc")).thenReturn(Optional.of(existing));
+        when(documentRepository.findByFileHashAndIsDeletedFalseAndStatus("abc", DocumentStatus.APPROVED)).thenReturn(Optional.of(existing));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
 
         DocumentDuplicateException ex = assertThrows(DocumentDuplicateException.class,
@@ -119,7 +139,7 @@ class DocumentDuplicateDetectionServiceTest {
     @Test
     void checkFileDuplicate_match_requesterHasNoAccess_stillRejectsButDoesNotDiscloseIdentity() {
         Document existing = existingDocument();
-        when(documentRepository.findByFileHashAndIsDeletedFalse("abc")).thenReturn(Optional.of(existing));
+        when(documentRepository.findByFileHashAndIsDeletedFalseAndStatus("abc", DocumentStatus.APPROVED)).thenReturn(Optional.of(existing));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(false);
 
         DocumentDuplicateException ex = assertThrows(DocumentDuplicateException.class,
@@ -141,7 +161,7 @@ class DocumentDuplicateDetectionServiceTest {
     @Test
     void checkContentDuplicate_match_throwsWithContentType() {
         Document existing = existingDocument();
-        when(documentRepository.findByContentHashAndIsDeletedFalse("hash123")).thenReturn(Optional.of(existing));
+        when(documentRepository.findByContentHashAndIsDeletedFalseAndStatus("hash123", DocumentStatus.APPROVED)).thenReturn(Optional.of(existing));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
 
         DocumentDuplicateException ex = assertThrows(DocumentDuplicateException.class,
@@ -152,7 +172,7 @@ class DocumentDuplicateDetectionServiceTest {
 
     @Test
     void checkContentDuplicate_noMatch_doesNotThrow() {
-        when(documentRepository.findByContentHashAndIsDeletedFalse("hash123")).thenReturn(Optional.empty());
+        when(documentRepository.findByContentHashAndIsDeletedFalseAndStatus("hash123", DocumentStatus.APPROVED)).thenReturn(Optional.empty());
         service.checkContentDuplicate("hash123", requester());
     }
 
@@ -194,7 +214,7 @@ class DocumentDuplicateDetectionServiceTest {
     @Test
     void whenDisabled_allChecksAreNoOp_evenWithAMatchPresent() {
         ReflectionTestUtils.setField(service, "duplicateDetectionEnabled", false);
-        when(documentRepository.findByFileHashAndIsDeletedFalse("abc")).thenReturn(Optional.of(existingDocument()));
+        when(documentRepository.findByFileHashAndIsDeletedFalseAndStatus("abc", DocumentStatus.APPROVED)).thenReturn(Optional.of(existingDocument()));
 
         service.checkFileDuplicate("abc", requester());
         // no exception, and repository must not even be queried

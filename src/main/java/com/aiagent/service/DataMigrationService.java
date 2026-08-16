@@ -27,6 +27,13 @@ public class DataMigrationService {
 
     @Transactional
     public void migrate() {
+        // Must run BEFORE anything below reads a Document through JPA (native
+        // SQL, bypasses enum mapping) -- see DocumentRepository's backfill
+        // methods for why: a dev DB using ddl-auto=update can have existing
+        // rows with a blank status / a legacy PRIVATE access_level that would
+        // otherwise crash every subsequent Document query in this method.
+        backfillLegacyDocumentData();
+
         Map<String, Role> roles = seedRoles();
         Map<String, Department> departments = seedDepartments();
         migrateUsers(roles, departments);
@@ -34,6 +41,16 @@ public class DataMigrationService {
         rebuildDocumentNormalization();
 
         log.info("Data migration completed successfully.");
+    }
+
+    private void backfillLegacyDocumentData() {
+        int linked = documentRepository.linkLegacyPrivateDocumentsToDepartment();
+        int privateToDepartment = documentRepository.backfillLegacyPrivateAccessLevel();
+        int statusFixed = documentRepository.backfillBlankStatus();
+        if (privateToDepartment > 0 || statusFixed > 0) {
+            log.info("[DATA-MIGRATION] Backfilled {} legacy PRIVATE document(s) to DEPARTMENT scope ({} department link(s) created), fixed {} document(s) with missing status -> APPROVED.",
+                    privateToDepartment, linked, statusFixed);
+        }
     }
 
     @Transactional

@@ -188,10 +188,13 @@ public class DocumentIngestionService {
                                long pipelineStartTime) {
 
         final String resolvedTitle = (title != null) ? title : ("document-" + documentId);
-        // Fail-closed: nếu accessLevel bị thiếu, mặc định PRIVATE (chỉ uploader +
-        // DIRECTOR thấy được) thay vì PUBLIC (ai cũng thấy) — tránh lộ dữ liệu
-        // ngoài ý muốn nếu caller mới quên truyền accessLevel.
-        final String resolvedAccessLevel = (accessLevel != null) ? accessLevel : "PRIVATE";
+        // Fail-closed: nếu accessLevel bị thiếu, mặc định DEPARTMENT (không
+        // còn PRIVATE — scope này đã bị loại bỏ) thay vì PUBLIC (ai cũng
+        // thấy). Vì departmentIds cũng sẽ rỗng trong trường hợp caller quên
+        // truyền accessLevel, guard "DEPARTMENT nhưng thiếu departmentIds"
+        // ngay bên dưới sẽ ABORT toàn bộ ingestion — an toàn hơn PRIVATE cũ
+        // (trước đây vẫn index được, chỉ uploader thấy; giờ không index luôn).
+        final String resolvedAccessLevel = (accessLevel != null) ? accessLevel : "DEPARTMENT";
         final String resolvedFileType = (fileType != null) ? fileType.toLowerCase() : "unknown";
         final List<Long> resolvedDeptIds = (departmentIds != null) ? departmentIds : List.of();
         final List<Long> resolvedProjIds = (projectIds != null) ? projectIds : List.of();

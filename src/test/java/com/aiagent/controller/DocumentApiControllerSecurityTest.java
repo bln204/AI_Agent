@@ -62,10 +62,13 @@ class DocumentApiControllerSecurityTest {
         return user;
     }
 
-    private Document privateDocOwnedByOther() {
+    // AccessLevel value is cosmetic fixture data here — documentAccessService
+    // is a @MockBean, so canAccessDocument's real scope logic never runs;
+    // each test stubs the boolean outcome directly. PRIVATE scope was removed.
+    private Document restrictedDocOwnedByOther() {
         Document doc = new Document();
         doc.setId(42L);
-        doc.setAccessLevel(AccessLevel.PRIVATE);
+        doc.setAccessLevel(AccessLevel.DEPARTMENT);
         doc.setTitle("Confidential");
         doc.setContent("secret content");
         return doc;
@@ -82,7 +85,7 @@ class DocumentApiControllerSecurityTest {
     void getDocument_unauthorizedForThisDocument_isForbidden() throws Exception {
         when(userRepository.findByEmail("employee@company.com"))
                 .thenReturn(Optional.of(userWithRole(1L, "employee@company.com", RoleConstants.ROLE_EMPLOYEE)));
-        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther());
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther());
         when(documentAccessService.canAccessDocument(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(false);
 
@@ -95,7 +98,7 @@ class DocumentApiControllerSecurityTest {
     void getDocument_authorizedForThisDocument_isOk() throws Exception {
         when(userRepository.findByEmail("employee@company.com"))
                 .thenReturn(Optional.of(userWithRole(1L, "employee@company.com", RoleConstants.ROLE_EMPLOYEE)));
-        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther());
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther());
         when(documentAccessService.canAccessDocument(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(true);
 

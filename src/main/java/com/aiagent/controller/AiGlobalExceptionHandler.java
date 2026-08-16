@@ -60,13 +60,29 @@ public class AiGlobalExceptionHandler {
         return uri.startsWith("/api/") || uri.startsWith("/ai/");
     }
 
+    // @PreAuthorize denials (e.g. DocumentController's approve/reject
+    // endpoints, MaintenanceController's reindex/purge-orphans) land here
+    // regardless of whether the endpoint is a JSON API or an MVC form-post —
+    // branch the same way handleMaxUploadSizeExceeded above does, so an MVC
+    // request still gets its expected redirect + flash "error" instead of a
+    // raw JSON body the browser would otherwise render verbatim.
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-            .body(Map.of(
-                "error", "ACCESS_DENIED",
-                "message", "Bạn không có quyền thực hiện thao tác này."
-            ));
+    public ResponseEntity<?> handleAccessDenied(AccessDeniedException e,
+            HttpServletRequest request, HttpServletResponse response) {
+        String message = "Bạn không có quyền thực hiện thao tác này.";
+
+        if (isApiRequest(request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "ACCESS_DENIED", "message", message));
+        }
+
+        FlashMap flashMap = RequestContextUtils.getOutputFlashMap(request);
+        flashMap.put("error", message);
+        RequestContextUtils.saveOutputFlashMap("/documents", request, response);
+
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create("/documents"))
+                .build();
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

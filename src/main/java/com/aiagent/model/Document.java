@@ -123,6 +123,22 @@ public class Document {
     @Column(nullable = false)
     private boolean isDeleted = false;
 
+    // Approval lifecycle. Default APPROVED so existing rows (created before this
+    // feature existed) and DIRECTOR uploads keep today's "visible immediately"
+    // behavior; MANAGER uploads are set to PENDING_APPROVAL explicitly by
+    // DocumentService.uploadDocument. VARCHAR-forced for the same reason as
+    // classification/viewerStatus above (avoid native MySQL ENUM schema drift).
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
+    private DocumentStatus status = DocumentStatus.APPROVED;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approved_by")
+    private User approvedBy;
+
+    private LocalDateTime approvedAt;
+
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)

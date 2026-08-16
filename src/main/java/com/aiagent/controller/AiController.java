@@ -34,12 +34,26 @@ public class AiController {
     public ResponseEntity<String> ingestDocument(@RequestParam("file") MultipartFile file) {
         try {
             User user = getCurrentUser();
+            // PRIVATE scope was removed (business decision); this endpoint has
+            // no scope-selection UI (unreferenced by any frontend page), so
+            // fall back to the closest equivalent to the old "only me" intent
+            // that remains valid: DEPARTMENT scoped to the caller's own
+            // department. Callers with no department assigned fall back to
+            // PUBLIC -- DEPARTMENT would otherwise fail the empty-departmentIds
+            // validation below with no narrower scope left to use instead.
+            boolean hasDepartment = user.getDepartment() != null;
+            com.aiagent.model.AccessLevel scope = hasDepartment
+                    ? com.aiagent.model.AccessLevel.DEPARTMENT
+                    : com.aiagent.model.AccessLevel.PUBLIC;
+            java.util.List<Long> deptIds = hasDepartment
+                    ? java.util.Collections.singletonList(user.getDepartment().getId())
+                    : java.util.Collections.emptyList();
             documentService.uploadDocument(
-                    file.getOriginalFilename(), 
-                    "", 
-                    java.util.Collections.emptyList(), 
-                    java.util.Collections.emptyList(), 
-                    com.aiagent.model.AccessLevel.PRIVATE, 
+                    file.getOriginalFilename(),
+                    "",
+                    deptIds,
+                    java.util.Collections.emptyList(),
+                    scope,
                     null,
                     com.aiagent.model.DocumentClassification.OTHER,
                     null,

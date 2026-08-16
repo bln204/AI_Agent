@@ -2,6 +2,7 @@ package com.aiagent.service;
 
 import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
+import com.aiagent.model.DocumentStatus;
 import com.aiagent.model.User;
 import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.repository.DocumentRepository;
@@ -57,6 +58,7 @@ public class DocumentService {
     private final ProjectRepository projectRepository;
     private final DocumentAccessService documentAccessService;
     private final DocumentViewerConversionService documentViewerConversionService;
+    private final NotificationService notificationService;
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
@@ -95,6 +97,19 @@ public class DocumentService {
                 pageable);
         log.debug("[DOC-ACCESS] Found {} accessible documents for user {}", result.getTotalElements(), userId);
         return result;
+    }
+
+    /**
+     * Backs the "Công văn chờ duyệt" tab (status=PENDING_APPROVAL) and the
+     * REJECTED history view. DIRECTOR sees every document in that status;
+     * everyone else only sees their own (decision #2/#4).
+     */
+    public Page<Document> getDocumentsByStatus(User user, DocumentStatus status, Pageable pageable) {
+        if (user == null || user.getRole() == null) {
+            throw new SecurityException("Cần đăng nhập để xem danh sách này.");
+        }
+        String roleCode = user.getRole().getCode();
+        return documentRepository.findByStatusVisibleTo(status, roleCode, user.getId(), pageable);
     }
 
     private final com.aiagent.service.DecisionNumberService decisionNumberService;
@@ -172,12 +187,33 @@ public class DocumentService {
         doc.setContent(normalizedFileContent != null ? normalizedFileContent : (content != null ? content : ""));
         doc.setAccessLevel(accessLevel != null ? accessLevel : AccessLevel.DEPARTMENT);
         doc.setUploadedBy(uploader);
+        // Approval lifecycle: DIRECTOR (and ADMIN) uploads are visible/ingested
+        // immediately as before; MANAGER uploads require DIRECTOR approval
+        // first (business requirement) and must NOT be ingested into Qdrant
+        // until approved -- see the `hasFile` ingestion block below, gated on
+        // this same status.
+        doc.setStatus(RoleConstants.isHighLevel(uploader.getRole().getCode())
+                ? DocumentStatus.APPROVED
+                : DocumentStatus.PENDING_APPROVAL);
         doc.setClassification(classification != null ? classification : com.aiagent.model.DocumentClassification.OTHER);
         doc.setDescription(description);
         doc.setInternalSourceFlag(internalSourceFlag);
         doc.setProjectName(projectName);
-        doc.setFileHash(fileHash);
-        doc.setContentHash(contentHash);
+        // file_hash/content_hash carry a UNIQUE DB constraint (V5 migration) that
+        // is not status-aware -- it blocks ANY row sharing the hash, regardless of
+        // status. checkFileDuplicate/checkContentDuplicate above only ever match
+        // against APPROVED documents (a Manager may resubmit the same file/content
+        // while an earlier submission is PENDING_APPROVAL or was REJECTED), so the
+        // hash columns must stay NULL for a PENDING_APPROVAL row -- MySQL's unique
+        // index permits multiple NULLs -- otherwise a REJECTED document's leftover
+        // hash would still collide at INSERT time. The hashes are computed and
+        // persisted once the document actually becomes APPROVED: immediately here
+        // for a DIRECTOR/ADMIN upload, or later in approveDocument() once a
+        // MANAGER's submission is approved.
+        if (doc.getStatus() == DocumentStatus.APPROVED) {
+            doc.setFileHash(fileHash);
+            doc.setContentHash(contentHash);
+        }
 
         if (com.aiagent.model.DocumentClassification.DECISION_DOCUMENT.equals(classification)) {
             doc.setDecisionNumber(decisionNumberService.generateNextDecisionNumber());
@@ -217,11 +253,6 @@ public class DocumentService {
                     doc.setProjectName(projectRepository.findById(projectIds.get(0)).map(com.aiagent.model.Project::getName).orElse("N/A"));
                 }
             }
-        } else if (AccessLevel.PRIVATE.equals(accessLevel)) {
-            doc.setDepartments(new java.util.HashSet<>());
-            doc.setProjects(new java.util.HashSet<>());
-            doc.setDepartmentName(null);
-            doc.setProjectName(null);
         } else if (AccessLevel.PUBLIC.equals(accessLevel)) {
         }
 
@@ -245,6 +276,13 @@ public class DocumentService {
             throw e;
         }
 
+        if (savedDoc.getStatus() == DocumentStatus.PENDING_APPROVAL) {
+            // Same transaction as the upload itself (decision: a notification
+            // must never exist for an upload that ends up rolled back, and
+            // vice versa a committed upload must not silently fail to notify).
+            notificationService.notifyDirectorsOfPendingDocument(savedDoc);
+        }
+
         if (hasFile) {
             String savedPath = writeFileToDisk(file, fileExtension);
             savedDoc.setFilePath(savedPath);
@@ -252,49 +290,15 @@ public class DocumentService {
 
             documentRepository.save(savedDoc);
 
-            java.util.List<Long> resolvedDeptIds = savedDoc.getDepartments().stream()
-                    .map(com.aiagent.model.Department::getId)
-                    .collect(java.util.stream.Collectors.toList());
-            java.util.List<Long> resolvedProjIds = savedDoc.getProjects().stream()
-                    .map(com.aiagent.model.Project::getId)
-                    .collect(java.util.stream.Collectors.toList());
-
-            String uploaderName = uploader.getUsername();
-            String uploaderRole = uploader.getRole() != null ? uploader.getRole().getName() : "STAFF";
-            String departmentNames = savedDoc.getDepartmentName();
-            if (departmentNames == null || departmentNames.isEmpty()) {
-                departmentNames = uploader.getDepartment() != null ? uploader.getDepartment().getName() : "UNKNOWN";
-            }
-
-            log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
-                    savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
-
-            try {
-                if (preSplitChunks != null) {
-                    // Text was already extracted + chunked above for the
-                    // duplicate check — reuse it instead of parsing the file
-                    // with Tika a second time.
-                    documentIngestionService.ingestPreExtracted(
-                            preSplitChunks, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
-                            uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
-                            savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
-                            savedDoc.isInternalSourceFlag(),
-                            savedDoc.getAccessLevel().name(),
-                            resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
-                } else {
-                    // No extractable text was found during the duplicate check
-                    // (e.g. scanned PDF) — fall back to the from-disk pipeline,
-                    // which handles that case the same way it always has.
-                    documentIngestionService.ingestDocument(
-                            savedPath, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
-                            uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
-                            savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
-                            savedDoc.isInternalSourceFlag(),
-                            savedDoc.getAccessLevel().name(),
-                            resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
-                }
-            } catch (Exception e) {
-                log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
+            if (savedDoc.getStatus() == DocumentStatus.APPROVED) {
+                triggerIngestion(savedDoc, preSplitChunks, savedPath, uploader);
+            } else {
+                // PENDING_APPROVAL: approval gate (business requirement) —
+                // must NOT be embedded/indexed into Qdrant until a DIRECTOR
+                // approves. See approveDocument(), which calls
+                // triggerIngestion() itself once status flips to APPROVED.
+                log.info("[APPROVAL-GATE] docId={} status=PENDING_APPROVAL — ingestion deferred until DIRECTOR approves.",
+                        savedDoc.getId());
             }
 
             // Pipeline Viewer — song song, độc lập với ingestion RAG ở trên.
@@ -328,6 +332,181 @@ public class DocumentService {
 
     public boolean canAccess(User user, Document doc) {
         return documentAccessService.canAccessDocument(user, doc);
+    }
+
+    /**
+     * Shared tail used by both the upload flow (when a DIRECTOR uploads, or
+     * when approveDocument() flips a MANAGER's PENDING_APPROVAL document to
+     * APPROVED) — builds the same metadata payload documentIngestionService
+     * has always received and fires the (@Async) ingestion call. Failure is
+     * logged only, never fails the caller's transaction, matching the
+     * pre-existing behavior at the original upload call site.
+     */
+    private void triggerIngestion(Document savedDoc, List<org.springframework.ai.document.Document> preSplitChunks,
+                                   String filePath, User uploader) {
+        java.util.List<Long> resolvedDeptIds = savedDoc.getDepartments().stream()
+                .map(com.aiagent.model.Department::getId)
+                .collect(java.util.stream.Collectors.toList());
+        java.util.List<Long> resolvedProjIds = savedDoc.getProjects().stream()
+                .map(com.aiagent.model.Project::getId)
+                .collect(java.util.stream.Collectors.toList());
+
+        String uploaderName = uploader.getUsername();
+        String uploaderRole = uploader.getRole() != null ? uploader.getRole().getName() : "STAFF";
+        String departmentNames = savedDoc.getDepartmentName();
+        if (departmentNames == null || departmentNames.isEmpty()) {
+            departmentNames = uploader.getDepartment() != null ? uploader.getDepartment().getName() : "UNKNOWN";
+        }
+
+        log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
+                savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
+
+        try {
+            if (preSplitChunks != null) {
+                // Text was already extracted + chunked for the duplicate check
+                // in the same request — reuse it instead of re-parsing the
+                // file with Tika a second time.
+                documentIngestionService.ingestPreExtracted(
+                        preSplitChunks, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
+                        uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
+                        savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
+                        savedDoc.isInternalSourceFlag(),
+                        savedDoc.getAccessLevel().name(),
+                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+            } else {
+                // No pre-split chunks available (approveDocument path, or the
+                // original upload had no extractable text) — from-disk pipeline.
+                documentIngestionService.ingestDocument(
+                        filePath, savedDoc.getId(), savedDoc.getDocumentUuid(), savedDoc.getTitle(), savedDoc.getFileType(),
+                        uploader.getId(), uploaderName, uploaderRole, departmentNames, savedDoc.getDecisionNumber(),
+                        savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
+                        savedDoc.isInternalSourceFlag(),
+                        savedDoc.getAccessLevel().name(),
+                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+            }
+        } catch (Exception e) {
+            log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * DIRECTOR approves a MANAGER's PENDING_APPROVAL document: flips status to
+     * APPROVED (only if it's still PENDING_APPROVAL — guards against
+     * double-approval / concurrent approval races, decision #9) and, if a
+     * file exists, triggers ingestion now that the document is allowed into
+     * Qdrant/RAG.
+     */
+    @Transactional
+    public Document approveDocument(Long id, User director) {
+        requireDirector(director, "duyệt");
+
+        int updated = documentRepository.approveIfPending(id, director, java.time.LocalDateTime.now());
+        Document doc = rejectIfNoRowsUpdated(id, updated);
+
+        if (doc.getFilePath() != null) {
+            assignApprovedHashes(doc, director);
+            triggerIngestion(doc, null, doc.getFilePath(), doc.getUploadedBy());
+        }
+        notificationService.notifyUploaderOfDecision(doc, true);
+        return doc;
+    }
+
+    /**
+     * A MANAGER upload keeps file_hash/content_hash NULL in the DB while
+     * PENDING_APPROVAL/REJECTED (see uploadDocument) so the UNIQUE constraint on
+     * those columns only ever guards APPROVED documents. Now that this document
+     * is APPROVED, compute and persist the hashes so it correctly participates
+     * in future duplicate checks, re-running checkFileDuplicate/checkContentDuplicate
+     * first so a DIRECTOR can't approve two independently-submitted duplicates
+     * into two APPROVED documents. A no-op for a DIRECTOR/ADMIN upload, which
+     * already had its hashes set at upload time.
+     *
+     * File bytes are re-hashed from disk (writeFileToDisk does a byte-for-byte
+     * copy, so this reproduces the exact upload-time hash) rather than
+     * persisting the original hash somewhere pending approval. The content hash
+     * reuses doc.getContent(), which already holds the same normalized text
+     * that produced the upload-time content hash, avoiding a second Tika parse.
+     */
+    private void assignApprovedHashes(Document doc, User director) {
+        if (doc.getFileHash() != null || doc.getContentHash() != null) {
+            return;
+        }
+
+        String fileHash;
+        try (java.io.InputStream in = Files.newInputStream(Paths.get(doc.getFilePath()))) {
+            fileHash = documentDuplicateDetectionService.hashBytes(in);
+        } catch (IOException e) {
+            throw new IllegalStateException("Không thể đọc tệp tài liệu để duyệt.", e);
+        }
+        documentDuplicateDetectionService.checkFileDuplicate(fileHash, director);
+
+        String contentHash = null;
+        if (doc.getContent() != null && !doc.getContent().isBlank()) {
+            contentHash = documentDuplicateDetectionService.hashText(doc.getContent());
+            documentDuplicateDetectionService.checkContentDuplicate(contentHash, director);
+        }
+
+        doc.setFileHash(fileHash);
+        doc.setContentHash(contentHash);
+        try {
+            documentRepository.save(doc);
+        } catch (DataIntegrityViolationException e) {
+            // Same race pattern as uploadDocument(): another document was approved
+            // with the same hash between the check above and this save. Re-check so
+            // the DIRECTOR gets the structured duplicate error instead of a raw 500.
+            log.warn("[DUPLICATE-RACE] Unique constraint violated on approve for docId={} — re-checking hashes.", doc.getId());
+            documentDuplicateDetectionService.checkFileDuplicate(fileHash, director);
+            documentDuplicateDetectionService.checkContentDuplicate(contentHash, director);
+            throw e;
+        }
+    }
+
+    /**
+     * DIRECTOR rejects a MANAGER's PENDING_APPROVAL document. The document
+     * itself is kept (status=REJECTED, not deleted) so both the uploader and
+     * DIRECTOR can still see it (decision #4); per decision #5, resubmission
+     * happens by uploading a brand-new document, not by reusing this one.
+     * Calls deleteFromVectorStore defensively even though a REJECTED document
+     * should never have reached Qdrant in the first place (the approval gate
+     * lives at upload time) — cheap insurance against that gate ever being
+     * bypassed by a future bug.
+     */
+    @Transactional
+    public Document rejectDocument(Long id, User director) {
+        requireDirector(director, "từ chối");
+
+        int updated = documentRepository.rejectIfPending(id, director, java.time.LocalDateTime.now());
+        Document doc = rejectIfNoRowsUpdated(id, updated);
+
+        try {
+            documentIngestionService.deleteFromVectorStore(id);
+        } catch (Exception e) {
+            log.error("Failed to purge document {} from vector store after rejection: {}", id, e.getMessage());
+        }
+        notificationService.notifyUploaderOfDecision(doc, false);
+        return doc;
+    }
+
+    private void requireDirector(User director, String action) {
+        if (director == null || director.getRole() == null
+                || !RoleConstants.ROLE_DIRECTOR.equals(director.getRole().getCode())) {
+            throw new SecurityException("Chỉ Giám đốc mới có quyền " + action + " tài liệu.");
+        }
+    }
+
+    /**
+     * The conditional UPDATE in approveIfPending/rejectIfPending affects 0
+     * rows either because the document doesn't exist, or (decision #9) because
+     * another request already approved/rejected it first — distinguish the
+     * two so the caller gets an accurate error instead of a generic failure.
+     */
+    private Document rejectIfNoRowsUpdated(Long id, int updatedRows) {
+        Document current = getDocument(id);
+        if (updatedRows == 0) {
+            throw new IllegalStateException(
+                    "Tài liệu đã được xử lý trước đó (trạng thái hiện tại: " + current.getStatus() + "). Vui lòng tải lại trang.");
+        }
+        return current;
     }
 
     /**

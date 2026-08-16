@@ -79,7 +79,6 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 }
 .badge.PUBLIC     { background: #dbeafe; color: #1d4ed8; }
 .badge.DEPARTMENT { background: #fef9c3; color: #a16207; }
-.badge.PRIVATE    { background: #fce7f3; color: #9d174d; }
 
 .dept-tag {
     display: inline-block;

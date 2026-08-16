@@ -2,6 +2,7 @@ package com.aiagent.service;
 
 import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
+import com.aiagent.model.DocumentStatus;
 import com.aiagent.model.Project;
 import com.aiagent.model.User;
 import com.aiagent.model.ProjectMember;
@@ -30,17 +31,27 @@ public class DocumentAccessService {
         // TRƯỚC nhánh PUBLIC, không để anonymous lọt qua trước guard.
         if (user == null) return false;
 
-        if (user.getRole() != null &&
-            RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode())) {
+        boolean isDirector = user.getRole() != null &&
+            RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode());
+        boolean isOwner = doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(user.getId());
+
+        // Approval lifecycle gate: PENDING_APPROVAL/REJECTED documents are only
+        // visible to the DIRECTOR (who approves/rejects) and the uploader
+        // (to track their own submission) — regardless of accessLevel scope.
+        // This check runs BEFORE the DIRECTOR-bypass below on purpose: it must
+        // not be skipped, it just happens DIRECTOR always satisfies it anyway.
+        DocumentStatus status = doc.getStatus();
+        if (status == DocumentStatus.PENDING_APPROVAL || status == DocumentStatus.REJECTED) {
+            return isDirector || isOwner;
+        }
+
+        if (isDirector) {
             return true;
         }
         if (AccessLevel.PUBLIC.equals(doc.getAccessLevel())) {
             return true;
         }
 
-        if (AccessLevel.PRIVATE.equals(doc.getAccessLevel())) {
-            return doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(user.getId());
-        }
         if (AccessLevel.DEPARTMENT.equals(doc.getAccessLevel())) {
             if (user.getDepartment() == null) return false;
             return doc.getDepartments().stream()
@@ -73,11 +84,6 @@ public class DocumentAccessService {
                 .collect(Collectors.toList());
 
         FilterExpressionBuilder.Op combined = b.eq("access_level", "PUBLIC");
-
-        combined = b.or(combined, b.and(
-            b.eq("access_level", "PRIVATE"),
-            b.eq("uploader_id", String.valueOf(user.getId()))
-        ));
 
         if (user.getDepartment() != null) {
             // "department_ids" là payload dạng mảng ở Qdrant (1 document có thể thuộc

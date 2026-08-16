@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,10 +76,14 @@ class DocumentApiControllerViewerSecurityTest {
         return user;
     }
 
-    private Document privateDocOwnedByOther(String viewerFilePath) {
+    // AccessLevel value here is cosmetic fixture data — documentAccessService
+    // is a @MockBean, so canAccessDocument's real scope logic never runs;
+    // each test stubs the boolean outcome directly (PRIVATE scope was
+    // removed, DEPARTMENT stands in as "some restricted scope").
+    private Document restrictedDocOwnedByOther(String viewerFilePath) {
         Document doc = new Document();
         doc.setId(42L);
-        doc.setAccessLevel(AccessLevel.PRIVATE);
+        doc.setAccessLevel(AccessLevel.DEPARTMENT);
         doc.setFileType("PDF");
         doc.setViewerFilePath(viewerFilePath);
         return doc;
@@ -97,7 +102,7 @@ class DocumentApiControllerViewerSecurityTest {
         // bytes here — reaching 403 (not 404/200) proves the authorization
         // check short-circuits before any file access is attempted.
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
-        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther("does-not-matter.pdf"));
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther("does-not-matter.pdf"));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(false);
 
         mockMvc.perform(get("/api/documents/42/viewer"))
@@ -118,7 +123,7 @@ class DocumentApiControllerViewerSecurityTest {
     @WithMockUser(username = "employee@company.com")
     void viewer_notYetConverted_isNotFound() throws Exception {
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
-        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther(null));
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther(null));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
 
         mockMvc.perform(get("/api/documents/42/viewer"))
@@ -132,7 +137,7 @@ class DocumentApiControllerViewerSecurityTest {
         Files.write(pdfFile, "%PDF-1.4 fake content".getBytes());
 
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
-        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther(pdfFile.toString()));
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther(pdfFile.toString()));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
 
         mockMvc.perform(get("/api/documents/42/viewer"))
@@ -140,7 +145,10 @@ class DocumentApiControllerViewerSecurityTest {
                 // App-wide CharacterEncodingFilter (force-response=true) appends
                 // ";charset=UTF-8" to every response, so compare compatibility
                 // rather than an exact literal match.
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF))
+                // Must never be cached by the browser/intermediate caches --
+                // internal document content should not be persisted client-side.
+                .andExpect(header().string("Cache-Control", "no-store"));
     }
 
     // GET /api/documents/{id}/viewer-status must follow the exact same
@@ -158,7 +166,7 @@ class DocumentApiControllerViewerSecurityTest {
     @WithMockUser(username = "employee@company.com")
     void viewerStatus_unauthorizedForThisDocument_isForbidden() throws Exception {
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
-        when(documentService.getDocument(42L)).thenReturn(privateDocOwnedByOther("does-not-matter.pdf"));
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther("does-not-matter.pdf"));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(false);
 
         mockMvc.perform(get("/api/documents/42/viewer-status"))
@@ -178,7 +186,7 @@ class DocumentApiControllerViewerSecurityTest {
     @Test
     @WithMockUser(username = "employee@company.com")
     void viewerStatus_authorized_returnsCurrentStatus() throws Exception {
-        Document doc = privateDocOwnedByOther(null);
+        Document doc = restrictedDocOwnedByOther(null);
         doc.setViewerStatus(ViewerStatus.PROCESSING);
 
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));

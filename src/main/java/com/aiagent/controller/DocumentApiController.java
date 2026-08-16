@@ -128,7 +128,12 @@ public class DocumentApiController {
             if (!resource.exists() || !resource.isReadable()) {
                 return ResponseEntity.notFound().build();
             }
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).body(resource);
+            // No caching: avoids caching confidential internal document content
+            // in the browser/any intermediate cache (WORKING_RULES §9/§10).
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .cacheControl(org.springframework.http.CacheControl.noStore())
+                    .body(resource);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }
@@ -152,7 +157,12 @@ public class DocumentApiController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        return ResponseEntity.ok(java.util.Map.of("status", doc.getViewerStatus().name()));
+        // Same no-store reasoning as getDocumentViewer -- this is polled while
+        // status transitions (PENDING/PROCESSING -> READY), a cached response
+        // for this URL would make the poll never observe the change.
+        return ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(java.util.Map.of("status", doc.getViewerStatus().name()));
     }
 
     @GetMapping("/search")
