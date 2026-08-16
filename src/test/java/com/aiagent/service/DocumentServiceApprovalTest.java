@@ -63,10 +63,12 @@ class DocumentServiceApprovalTest {
     private DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
     private DocumentService documentService;
+    private Path tempDir;
 
     @BeforeEach
     void setUp(@org.junit.jupiter.api.io.TempDir Path tempDir) {
         MockitoAnnotations.openMocks(this);
+        this.tempDir = tempDir;
         documentService = new DocumentService(documentRepository, documentIngestionService, departmentRepository,
                 projectRepository, documentAccessService, documentViewerConversionService, notificationService,
                 decisionNumberService, documentDuplicateDetectionService);
@@ -157,23 +159,37 @@ class DocumentServiceApprovalTest {
     }
 
     @Test
-    void approveDocument_pendingDocument_transitionsToApproved_andTriggersIngestion() {
+    void approveDocument_pendingDocument_transitionsToApproved_andTriggersIngestion() throws IOException {
+        // A real file is required: approveDocument() now re-hashes the file from
+        // disk (byte-for-byte identical to the upload-time hash) so it can persist
+        // file_hash/content_hash once the document becomes APPROVED -- see
+        // DocumentService#assignApprovedHashes. Those columns are left NULL while
+        // PENDING_APPROVAL/REJECTED so the UNIQUE DB constraint on them only ever
+        // guards APPROVED documents (matching DocumentDuplicateDetectionService's
+        // APPROVED-only check) and no longer blocks a Manager resubmitting the same
+        // file/content after a rejection.
+        Path filePath = tempDir.resolve("some-file.pdf");
+        java.nio.file.Files.write(filePath, "pdf-bytes".getBytes());
+
         Document approvedDoc = new Document();
         approvedDoc.setId(5L);
         approvedDoc.setStatus(DocumentStatus.APPROVED);
         approvedDoc.setAccessLevel(AccessLevel.PUBLIC);
         approvedDoc.setClassification(DocumentClassification.OTHER);
         approvedDoc.setUploadedBy(manager());
-        approvedDoc.setFilePath("/tmp/some-file.pdf");
+        approvedDoc.setFilePath(filePath.toString());
         approvedDoc.setFileType("PDF");
 
         when(documentRepository.approveIfPending(eq(5L), eq(director()), any())).thenReturn(1);
         when(documentRepository.findById(5L)).thenReturn(Optional.of(approvedDoc));
+        when(documentDuplicateDetectionService.hashBytes(any())).thenReturn("computed-file-hash");
 
         Document result = documentService.approveDocument(5L, director());
 
         assertEquals(DocumentStatus.APPROVED, result.getStatus());
-        verify(documentIngestionService).ingestDocument(eq("/tmp/some-file.pdf"), eq(5L), any(), any(), any(),
+        assertEquals("computed-file-hash", result.getFileHash());
+        verify(documentDuplicateDetectionService).checkFileDuplicate("computed-file-hash", director());
+        verify(documentIngestionService).ingestDocument(eq(filePath.toString()), eq(5L), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
         verify(notificationService).notifyUploaderOfDecision(result, true);
     }

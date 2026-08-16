@@ -199,8 +199,21 @@ public class DocumentService {
         doc.setDescription(description);
         doc.setInternalSourceFlag(internalSourceFlag);
         doc.setProjectName(projectName);
-        doc.setFileHash(fileHash);
-        doc.setContentHash(contentHash);
+        // file_hash/content_hash carry a UNIQUE DB constraint (V5 migration) that
+        // is not status-aware -- it blocks ANY row sharing the hash, regardless of
+        // status. checkFileDuplicate/checkContentDuplicate above only ever match
+        // against APPROVED documents (a Manager may resubmit the same file/content
+        // while an earlier submission is PENDING_APPROVAL or was REJECTED), so the
+        // hash columns must stay NULL for a PENDING_APPROVAL row -- MySQL's unique
+        // index permits multiple NULLs -- otherwise a REJECTED document's leftover
+        // hash would still collide at INSERT time. The hashes are computed and
+        // persisted once the document actually becomes APPROVED: immediately here
+        // for a DIRECTOR/ADMIN upload, or later in approveDocument() once a
+        // MANAGER's submission is approved.
+        if (doc.getStatus() == DocumentStatus.APPROVED) {
+            doc.setFileHash(fileHash);
+            doc.setContentHash(contentHash);
+        }
 
         if (com.aiagent.model.DocumentClassification.DECISION_DOCUMENT.equals(classification)) {
             doc.setDecisionNumber(decisionNumberService.generateNextDecisionNumber());
@@ -391,10 +404,61 @@ public class DocumentService {
         Document doc = rejectIfNoRowsUpdated(id, updated);
 
         if (doc.getFilePath() != null) {
+            assignApprovedHashes(doc, director);
             triggerIngestion(doc, null, doc.getFilePath(), doc.getUploadedBy());
         }
         notificationService.notifyUploaderOfDecision(doc, true);
         return doc;
+    }
+
+    /**
+     * A MANAGER upload keeps file_hash/content_hash NULL in the DB while
+     * PENDING_APPROVAL/REJECTED (see uploadDocument) so the UNIQUE constraint on
+     * those columns only ever guards APPROVED documents. Now that this document
+     * is APPROVED, compute and persist the hashes so it correctly participates
+     * in future duplicate checks, re-running checkFileDuplicate/checkContentDuplicate
+     * first so a DIRECTOR can't approve two independently-submitted duplicates
+     * into two APPROVED documents. A no-op for a DIRECTOR/ADMIN upload, which
+     * already had its hashes set at upload time.
+     *
+     * File bytes are re-hashed from disk (writeFileToDisk does a byte-for-byte
+     * copy, so this reproduces the exact upload-time hash) rather than
+     * persisting the original hash somewhere pending approval. The content hash
+     * reuses doc.getContent(), which already holds the same normalized text
+     * that produced the upload-time content hash, avoiding a second Tika parse.
+     */
+    private void assignApprovedHashes(Document doc, User director) {
+        if (doc.getFileHash() != null || doc.getContentHash() != null) {
+            return;
+        }
+
+        String fileHash;
+        try (java.io.InputStream in = Files.newInputStream(Paths.get(doc.getFilePath()))) {
+            fileHash = documentDuplicateDetectionService.hashBytes(in);
+        } catch (IOException e) {
+            throw new IllegalStateException("Không thể đọc tệp tài liệu để duyệt.", e);
+        }
+        documentDuplicateDetectionService.checkFileDuplicate(fileHash, director);
+
+        String contentHash = null;
+        if (doc.getContent() != null && !doc.getContent().isBlank()) {
+            contentHash = documentDuplicateDetectionService.hashText(doc.getContent());
+            documentDuplicateDetectionService.checkContentDuplicate(contentHash, director);
+        }
+
+        doc.setFileHash(fileHash);
+        doc.setContentHash(contentHash);
+        try {
+            documentRepository.save(doc);
+        } catch (DataIntegrityViolationException e) {
+            // Same race pattern as uploadDocument(): another document was approved
+            // with the same hash between the check above and this save. Re-check so
+            // the DIRECTOR gets the structured duplicate error instead of a raw 500.
+            log.warn("[DUPLICATE-RACE] Unique constraint violated on approve for docId={} — re-checking hashes.", doc.getId());
+            documentDuplicateDetectionService.checkFileDuplicate(fileHash, director);
+            documentDuplicateDetectionService.checkContentDuplicate(contentHash, director);
+            throw e;
+        }
     }
 
     /**
