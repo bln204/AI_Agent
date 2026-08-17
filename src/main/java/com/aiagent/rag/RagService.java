@@ -115,6 +115,7 @@ public class RagService {
             for (ProvenanceBuilder.SourceMetadata source : sources) {
                 sourcesBuilder.append("  - DOCUMENT: ").append(source.getDocumentName())
                               .append(" | UPLOADER: ").append(source.getUserName())
+                              .append(" | APPROVER: ").append(source.getApproverName())
                               .append(" | DEPT: ").append(source.getDepartment())
                               .append("\n");
             }
@@ -141,7 +142,9 @@ public class RagService {
               .append(" | ROLE: ").append(source.getUploaderRole())
               .append(" | DEPT: ").append(source.getDepartment())
               .append(" | PROJECT: ").append(source.getProjectName())
-              .append(" | DATE: ").append(source.getUploadDate());
+              .append(" | UPLOAD_DATE: ").append(source.getUploadDate())
+              .append(" | APPROVER: ").append(source.getApproverName())
+              .append(" | APPROVED_DATE: ").append(source.getApprovedDate());
             sb.append("\n");
         }
         return sb.toString().trim();

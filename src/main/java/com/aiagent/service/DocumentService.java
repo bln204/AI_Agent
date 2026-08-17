@@ -213,6 +213,15 @@ public class DocumentService {
         if (doc.getStatus() == DocumentStatus.APPROVED) {
             doc.setFileHash(fileHash);
             doc.setContentHash(contentHash);
+
+            // DIRECTOR/ADMIN uploads skip the PENDING_APPROVAL queue entirely, so
+            // approveDocument() never runs for them -- record the uploader as the
+            // approver right here instead, so approvedBy/approvedAt are always
+            // populated for every APPROVED document (RAG source citation and the
+            // document detail page both read these fields; leaving them null for
+            // this path would silently omit "người duyệt" for self-approved docs).
+            doc.setApprovedBy(uploader);
+            doc.setApprovedAt(java.time.LocalDateTime.now());
         }
 
         if (com.aiagent.model.DocumentClassification.DECISION_DOCUMENT.equals(classification)) {
@@ -357,6 +366,10 @@ public class DocumentService {
         if (departmentNames == null || departmentNames.isEmpty()) {
             departmentNames = uploader.getDepartment() != null ? uploader.getDepartment().getName() : "UNKNOWN";
         }
+        // Only reached once savedDoc.getStatus() == APPROVED (self-approved at
+        // upload time for DIRECTOR/ADMIN, or flipped by approveDocument() for a
+        // MANAGER submission), so approvedBy/approvedAt are always populated here.
+        String approverName = savedDoc.getApprovedBy() != null ? savedDoc.getApprovedBy().getUsername() : null;
 
         log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
                 savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
@@ -372,7 +385,8 @@ public class DocumentService {
                         savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
                         savedDoc.isInternalSourceFlag(),
                         savedDoc.getAccessLevel().name(),
-                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion(),
+                        approverName, savedDoc.getApprovedAt());
             } else {
                 // No pre-split chunks available (approveDocument path, or the
                 // original upload had no extractable text) — from-disk pipeline.
@@ -382,7 +396,8 @@ public class DocumentService {
                         savedDoc.getClassification().name(), savedDoc.getProjectName(), savedDoc.getDescription(),
                         savedDoc.isInternalSourceFlag(),
                         savedDoc.getAccessLevel().name(),
-                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion());
+                        resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion(),
+                        approverName, savedDoc.getApprovedAt());
             }
         } catch (Exception e) {
             log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
