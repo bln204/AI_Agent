@@ -101,7 +101,7 @@ class DocumentIngestionServiceXlsxTest {
 
         service.ingestDocumentSync(xlsx.toString(), 1L, "uuid-1", "employees.xlsx", "xlsx",
                 10L, "tester", "EMPLOYEE", "IT", "N/A", "OTHER", "N/A", "desc", false,
-                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", LocalDateTime.now());
+                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", "Giám đốc", LocalDateTime.now());
 
         ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(vectorStore, times(1)).add(captor.capture());
@@ -124,7 +124,7 @@ class DocumentIngestionServiceXlsxTest {
 
         service.ingestDocumentSync(xlsx.toString(), 2L, "uuid-2", "employees2.xlsx", "XLSX",
                 10L, "tester", "EMPLOYEE", "IT", "N/A", "OTHER", "N/A", "desc", false,
-                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", LocalDateTime.now());
+                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", "Giám đốc", LocalDateTime.now());
 
         List<Double> vector = embeddingModel.embed("probe text");
         assertNotNull(vector);
@@ -161,7 +161,7 @@ class DocumentIngestionServiceXlsxTest {
 
         service.ingestDocumentSync(file.toString(), 4L, "uuid-4", "multi.xlsx", "xlsx",
                 10L, "tester", "EMPLOYEE", "IT", "N/A", "OTHER", "N/A", "desc", false,
-                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", LocalDateTime.now());
+                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", "Giám đốc", LocalDateTime.now());
 
         ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(vectorStore, times(1)).add(captor.capture());
@@ -185,7 +185,7 @@ class DocumentIngestionServiceXlsxTest {
 
         service.ingestDocumentSync(txt.toString(), 3L, "uuid-3", "notes.txt", "txt",
                 10L, "tester", "EMPLOYEE", "IT", "N/A", "OTHER", "N/A", "desc", false,
-                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", LocalDateTime.now());
+                "PUBLIC", List.of(), List.of(), LocalDateTime.now(), 1, "director1", "Giám đốc", LocalDateTime.now());
 
         ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(vectorStore, times(1)).add(captor.capture());

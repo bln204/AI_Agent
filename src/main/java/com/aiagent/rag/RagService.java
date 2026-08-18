@@ -36,7 +36,9 @@ public class RagService {
             if (!rawDocuments.isEmpty()) {
                 log.warn("[RAG-PIPELINE] Retrieval found {} chunks, but ALL were filtered by security barrier for user {}", 
                         rawDocuments.size(), user.getEmail());
-                return "PHẦN 1:\n- summary: Không đủ quyền truy cập dữ liệu liên quan\n- details: Các tài liệu tìm thấy không nằm trong phạm vi truy cập của bạn.\n\nPHẦN 2:\n- sources: []";
+                return "Mình tìm thấy một vài tài liệu có vẻ liên quan đến câu hỏi này, nhưng chúng không nằm trong phạm vi "
+                        + "truy cập của bạn, nên mình không thể dùng để trả lời. Nếu bạn cần xem, hãy liên hệ người quản lý "
+                        + "tài liệu hoặc quản trị viên để được cấp quyền nhé.";
             }
             return promptBuilder.getFallbackMessage();
         }
@@ -108,24 +110,39 @@ public class RagService {
     }
 
     private String buildFailsafeResponse(List<ProvenanceBuilder.SourceMetadata> sources) {
-        StringBuilder sourcesBuilder = new StringBuilder();
-        if (sources.isEmpty()) {
-            sourcesBuilder.append("  - Không có nguồn dữ liệu.");
-        } else {
-            for (ProvenanceBuilder.SourceMetadata source : sources) {
-                sourcesBuilder.append("  - DOCUMENT: ").append(source.getDocumentName())
-                              .append(" | UPLOADER: ").append(source.getUserName())
-                              .append(" | APPROVER: ").append(source.getApproverName())
-                              .append(" | DEPT: ").append(source.getDepartment())
-                              .append("\n");
+        StringBuilder message = new StringBuilder(
+                "Hệ thống AI hiện đang quá tải nên chưa thể xử lý câu hỏi của bạn ngay lúc này. "
+                        + "Bạn vui lòng thử lại sau vài giây hoặc liên hệ quản trị viên nếu tình trạng này tiếp tục xảy ra nhé.");
+
+        if (!sources.isEmpty()) {
+            message.append(" Trong lúc chờ, mình đã tìm thấy một vài tài liệu có thể liên quan: ");
+            for (int i = 0; i < sources.size(); i++) {
+                ProvenanceBuilder.SourceMetadata source = sources.get(i);
+                if (i > 0) message.append("; ");
+                message.append('"').append(source.getDocumentName()).append('"')
+                        .append(" (do ").append(source.getUserName());
+
+                String department = source.getDepartment();
+                boolean hasRealDepartment = department != null && !department.isBlank()
+                        && !"UNKNOWN".equalsIgnoreCase(department) && !"Tất cả".equalsIgnoreCase(department);
+                if (hasRealDepartment) {
+                    message.append(" thuộc ").append(department);
+                }
+
+                // Director uploads are self-approved (uploader == approver) -- citing the
+                // approver separately would just repeat the same name, see triggerIngestion().
+                boolean selfApproved = source.getUserName() != null
+                        && source.getUserName().equals(source.getApproverName());
+                message.append(" tải lên");
+                if (!selfApproved) {
+                    message.append(", ").append(source.getApproverName()).append(" duyệt");
+                }
+                message.append(')');
             }
+            message.append('.');
         }
 
-        return "PHẦN 1:\n" +
-               "- summary: Hệ thống AI hiện đang quá tải (quota exceeded), không thể xử lý câu hỏi tại thời điểm này.\n" +
-               "- details: Vui lòng thử lại sau vài giây hoặc liên hệ quản trị viên nếu lỗi tiếp tục xảy ra.\n\n" +
-               "PHẦN 2:\n" +
-               "- sources:\n" + sourcesBuilder.toString().trim();
+        return message.toString();
     }
 
 
@@ -139,11 +156,12 @@ public class RagService {
             sb.append("- DOCUMENT: ").append(source.getDocumentName())
               .append(" | DECISION: ").append(source.getDecisionNumber().equals("N/A") ? "None" : source.getDecisionNumber())
               .append(" | UPLOADER: ").append(source.getUserName())
-              .append(" | ROLE: ").append(source.getUploaderRole())
+              .append(" | UPLOADER_ROLE: ").append(source.getUploaderRole())
               .append(" | DEPT: ").append(source.getDepartment())
               .append(" | PROJECT: ").append(source.getProjectName())
               .append(" | UPLOAD_DATE: ").append(source.getUploadDate())
               .append(" | APPROVER: ").append(source.getApproverName())
+              .append(" | APPROVER_ROLE: ").append(source.getApproverRole())
               .append(" | APPROVED_DATE: ").append(source.getApprovedDate());
             sb.append("\n");
         }

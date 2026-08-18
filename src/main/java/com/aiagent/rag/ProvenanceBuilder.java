@@ -24,6 +24,7 @@ public class ProvenanceBuilder {
         private String department;
         private String projectName;
         private String approverName;
+        private String approverRole;
         private String approvedDate;
         private boolean internalSource;
         private double score;
@@ -58,6 +59,7 @@ public class ProvenanceBuilder {
                         .department((String) metadata.getOrDefault("department", "UNKNOWN"))
                         .projectName((String) metadata.getOrDefault("project_name", "N/A"))
                         .approverName((String) metadata.getOrDefault("approver_name", "Chưa xác định"))
+                        .approverRole((String) metadata.getOrDefault("approver_role", "UNKNOWN"))
                         .approvedDate((String) metadata.getOrDefault("approved_date", "Chưa xác định"))
                         .internalSource(Boolean.parseBoolean(String.valueOf(metadata.getOrDefault("internal_source_flag", "true"))))
                         .score(currentScore)
