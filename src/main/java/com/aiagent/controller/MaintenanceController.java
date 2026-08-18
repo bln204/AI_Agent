@@ -54,6 +54,7 @@ public class MaintenanceController {
                 if (departmentNames.isEmpty() && doc.getUploadedBy() != null && doc.getUploadedBy().getDepartment() != null) {
                     departmentNames = doc.getUploadedBy().getDepartment().getName();
                 }
+                String approverName = (doc.getApprovedBy() != null) ? doc.getApprovedBy().getUsername() : null;
 
                 ingestionService.ingestDocument(
                     doc.getFilePath(),
@@ -74,7 +75,9 @@ public class MaintenanceController {
                     deptIds,
                     projIds,
                     doc.getCreatedAt(),
-                    doc.getVersion()
+                    doc.getVersion(),
+                    approverName,
+                    doc.getApprovedAt()
                 );
                 count++;
             } catch (Exception e) {

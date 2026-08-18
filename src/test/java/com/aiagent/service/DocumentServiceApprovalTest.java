@@ -128,8 +128,8 @@ class DocumentServiceApprovalTest {
                 null, DocumentClassification.OTHER, null, "desc", true, null, manager());
 
         assertEquals(DocumentStatus.PENDING_APPROVAL, saved.getStatus());
-        verify(documentIngestionService, never()).ingestDocument(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
-        verify(documentIngestionService, never()).ingestPreExtracted(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
+        verify(documentIngestionService, never()).ingestDocument(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any(), any(), any());
+        verify(documentIngestionService, never()).ingestPreExtracted(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any(), any(), any());
         verify(notificationService).notifyDirectorsOfPendingDocument(saved);
     }
 
@@ -190,7 +190,7 @@ class DocumentServiceApprovalTest {
         assertEquals("computed-file-hash", result.getFileHash());
         verify(documentDuplicateDetectionService).checkFileDuplicate("computed-file-hash", director());
         verify(documentIngestionService).ingestDocument(eq(filePath.toString()), eq(5L), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any(), any(), any());
         verify(notificationService).notifyUploaderOfDecision(result, true);
     }
 
@@ -206,7 +206,7 @@ class DocumentServiceApprovalTest {
         when(documentRepository.findById(6L)).thenReturn(Optional.of(rejectedAlready));
 
         assertThrows(IllegalStateException.class, () -> documentService.approveDocument(6L, director()));
-        verify(documentIngestionService, never()).ingestDocument(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
+        verify(documentIngestionService, never()).ingestDocument(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any(), any(), any());
     }
 
     // --- rejectDocument ---

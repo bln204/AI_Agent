@@ -135,7 +135,7 @@ class DocumentServiceXlsxUploadTest {
         ArgumentCaptor<List<org.springframework.ai.document.Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(documentIngestionService).ingestPreExtracted(
                 captor.capture(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
+                any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any(), any(), any());
 
         List<org.springframework.ai.document.Document> chunks = captor.getValue();
         assertFalse(chunks.isEmpty());
@@ -157,7 +157,7 @@ class DocumentServiceXlsxUploadTest {
         ArgumentCaptor<List<org.springframework.ai.document.Document>> captor = ArgumentCaptor.forClass(List.class);
         verify(documentIngestionService).ingestPreExtracted(
                 captor.capture(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any());
+                any(), any(), any(), any(), anyBoolean(), any(), anyList(), anyList(), any(), any(), any(), any());
 
         List<org.springframework.ai.document.Document> chunks = captor.getValue();
         assertFalse(chunks.isEmpty());

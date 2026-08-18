@@ -80,14 +80,15 @@ public class RagReindexService {
                 // PUBLIC nếu document thiếu accessLevel — kết hợp với departmentIds
                 // rỗng, ingestDocumentSync's own guard sẽ ABORT thay vì lộ dữ liệu.
                 String accessLevel = (doc.getAccessLevel() != null) ? doc.getAccessLevel().name() : "DEPARTMENT";
+                String approverName = (doc.getApprovedBy() != null) ? doc.getApprovedBy().getUsername() : null;
 
                 documentIngestionService.ingestDocumentSync(
-                        doc.getFilePath(), 
-                        doc.getId(), 
+                        doc.getFilePath(),
+                        doc.getId(),
                         doc.getDocumentUuid(),
-                        doc.getTitle(), 
+                        doc.getTitle(),
                         doc.getFileType(),
-                        uploaderId, 
+                        uploaderId,
                         userName,
                         doc.getUploaderRole(),
                         departmentNames,
@@ -97,10 +98,12 @@ public class RagReindexService {
                         doc.getDescription(),
                         doc.isInternalSourceFlag(),
                         accessLevel,
-                        deptIds, 
+                        deptIds,
                         projIds,
                         doc.getCreatedAt(),
-                        doc.getVersion()
+                        doc.getVersion(),
+                        approverName,
+                        doc.getApprovedAt()
                 );
                 
                 successCount++;

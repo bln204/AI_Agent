@@ -25,10 +25,15 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     // never supposed to reach Qdrant at all (approval gate lives in
     // DocumentService.uploadDocument/approveDocument). Filtering here too is a
     // second, independent safety net for the manual/startup reindex paths.
+    // approvedBy is FETCH-joined too: RagReindexService/MaintenanceController
+    // read doc.getApprovedBy() outside this query's transaction to build RAG
+    // provenance metadata, which would otherwise throw
+    // LazyInitializationException on this LAZY association.
     @Query("SELECT DISTINCT d FROM Document d " +
            "LEFT JOIN FETCH d.departments " +
            "LEFT JOIN FETCH d.projects " +
            "LEFT JOIN FETCH d.uploadedBy " +
+           "LEFT JOIN FETCH d.approvedBy " +
            "WHERE d.status = com.aiagent.model.DocumentStatus.APPROVED")
     List<Document> findAllForReindexing();
 
