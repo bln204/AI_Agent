@@ -30,8 +30,9 @@ WORKDIR /app
 # libreoffice-writer pulls in the soffice binary + its core dependencies via
 # apt; --no-install-recommends avoids installing the full office suite
 # (calc/impress/etc.) that isn't needed for DOCX conversion.
+# curl is added for the container HEALTHCHECK below.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libreoffice-writer && \
+    apt-get install -y --no-install-recommends libreoffice-writer curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -60,5 +61,31 @@ ENV APP_UPLOAD_DIR=/app/uploads
 # Set default timezone to UTC (or change according to needs)
 ENV TZ=UTC
 
+# Container-aware healthcheck. /actuator/health is permitAll() in
+# SecurityConfig, so this works without credentials. start-period is long
+# because the ONNX embedding model (~86MB, downloaded on first boot if the
+# cache volume is empty) plus its warmup call can take ~25-30s before the
+# app is ready — see AiEmbeddingConfig.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# JVM memory tuning: the local ONNX embedding model + its inference buffers
+# hold ~440-600MB of NATIVE memory outside the JVM heap once warmed up and
+# under real XLSX/PDF embedding load (measured directly against this app's
+# embedding bean), and DOCX->PDF conversion spawns a separate soffice
+# process that adds further memory on top of the JVM's own footprint. Both
+# count against the same container memory limit as the heap. MaxRAMPercentage
+# (rather than a fixed -Xmx) keeps the heap at a fixed fraction of whatever
+# container memory limit is configured on the host (Railway/Render/etc.),
+# instead of hardcoding a value that silently stops making sense if that
+# limit is resized later. Deploy this container with >= 2GB memory (3GB
+# recommended) so the remaining ~60% comfortably covers the ONNX model,
+# LibreOffice, and OS/thread overhead alongside the heap.
 # Run the application
-ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
+ENTRYPOINT ["java", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-XX:MaxRAMPercentage=40.0", \
+    "-XX:MinRAMPercentage=20.0", \
+    "-XX:MaxMetaspaceSize=256m", \
+    "-XX:+ExitOnOutOfMemoryError", \
+    "-jar", "app.jar"]
