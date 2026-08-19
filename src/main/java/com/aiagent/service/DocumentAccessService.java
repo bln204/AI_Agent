@@ -136,31 +136,62 @@ public class DocumentAccessService {
         return RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode());
     }
 
-    public boolean canViewProjects(User user) {
-        if (user == null || user.getRole() == null) return false;
-        String roleCode = user.getRole().getCode();
-        return RoleConstants.ROLE_DIRECTOR.equals(roleCode) || RoleConstants.ROLE_MANAGER.equals(roleCode);
-    }
-
     public boolean canManageMembers(User user) {
         if (user == null || user.getRole() == null) return false;
         return RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode());
     }
 
-    public boolean canAccessProjectManagement(User user) {
-        if (user == null || user.getRole() == null) return false;
-        String roleCode = user.getRole().getCode();
-        return RoleConstants.ROLE_DIRECTOR.equals(roleCode) || RoleConstants.ROLE_MANAGER.equals(roleCode);
+    /**
+     * Gate cho việc VÀO ĐƯỢC trang danh sách dự án (/projects) -- chỉ cần đã
+     * đăng nhập. KHÔNG quyết định dự án nào hiển thị: DIRECTOR thấy tất cả,
+     * MANAGER/EMPLOYEE chỉ thấy dự án mình tham gia -- việc lọc đó nằm ở
+     * ProjectController/ProjectService (ProjectService.getProjectsForUser),
+     * không phải ở đây.
+     */
+    public boolean canAccessProjectsPage(User user) {
+        return user != null && user.getRole() != null;
     }
 
     /**
-     * User chỉ được xem chi tiết/thành viên của một project cụ thể nếu là DIRECTOR
-     * hoặc thực sự là thành viên project đó (rule 4.3: PROJECT phải kiểm tra
+     * User chỉ được xem chi tiết một project cụ thể nếu là DIRECTOR hoặc thực
+     * sự là thành viên project đó (rule 4.3: PROJECT phải kiểm tra
      * ProjectMembership thật, không suy luận từ role/department).
      */
     public boolean canAccessProject(User user, Project project) {
         if (user == null || user.getRole() == null || project == null) return false;
         if (RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode())) return true;
         return projectMemberRepository.existsByProjectAndUser(project, user);
+    }
+
+    /**
+     * Leader là khái niệm PER-PROJECT (đánh dấu trên ProjectMember), không
+     * phải role hệ thống -- một EMPLOYEE vẫn có thể là leader của 1 dự án cụ
+     * thể. Không được suy luận role MANAGER/DIRECTOR = leader.
+     */
+    public boolean isProjectLeader(User user, Project project) {
+        if (user == null || project == null) return false;
+        return projectMemberRepository.findByProjectAndUser(project, user)
+                .map(ProjectMember::isLeader)
+                .orElse(false);
+    }
+
+    /**
+     * Sửa mô tả / trạng thái / hồ sơ tài liệu của MỘT dự án cụ thể: DIRECTOR
+     * (toàn quyền) hoặc leader của chính dự án đó (quyền hẹp hơn, được kiểm
+     * tra chi tiết ở ProjectService theo từng field/action).
+     */
+    public boolean canUpdateProject(User user, Project project) {
+        return canManageProjects(user) || isProjectLeader(user, project);
+    }
+
+    /**
+     * Ngoại lệ hẹp, có chủ đích (đã xác nhận với business): một EMPLOYEE làm
+     * leader của 1 dự án được phép upload tài liệu CHỈ trong phạm vi dự án đó
+     * -- rule "Nhân viên không được upload tài liệu" (canUpload ở trên) vẫn
+     * giữ nguyên cho MỌI nơi khác (trang /documents chung). KHÔNG được dùng
+     * method này thay cho canUpload() ở ngoài ngữ cảnh 1 project cụ thể.
+     */
+    public boolean canUploadToProject(User user, Project project) {
+        return canUpload(user) || isProjectLeader(user, project);
     }
 }

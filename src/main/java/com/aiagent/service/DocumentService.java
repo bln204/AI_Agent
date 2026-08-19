@@ -115,6 +115,24 @@ public class DocumentService {
     private final com.aiagent.service.DecisionNumberService decisionNumberService;
     private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
+    /**
+     * Ngoại lệ hẹp, có chủ đích (business decision, xem DocumentAccessService.
+     * canUploadToProject): một EMPLOYEE làm leader của 1 dự án cụ thể được
+     * phép upload tài liệu CHỈ khi accessLevel=PROJECT và MỌI project trong
+     * projectIds đều do chính họ làm leader -- không được lợi dụng ô chọn
+     * nhiều dự án ở trang /documents chung để gắn vào dự án họ không lãnh đạo.
+     * Rule "Nhân viên không được upload tài liệu" (canUpload) không đổi cho
+     * mọi trường hợp khác.
+     */
+    private boolean isProjectLeaderUploadException(User uploader, AccessLevel accessLevel, List<Long> projectIds) {
+        if (!AccessLevel.PROJECT.equals(accessLevel) || projectIds == null || projectIds.isEmpty()) {
+            return false;
+        }
+        return projectIds.stream().allMatch(pid -> projectRepository.findById(pid)
+                .map(p -> documentAccessService.isProjectLeader(uploader, p))
+                .orElse(false));
+    }
+
     @Transactional
     public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
                                  java.util.List<Long> projectIds, AccessLevel accessLevel,
@@ -126,7 +144,7 @@ public class DocumentService {
             throw new SecurityException("Không có quyền tải lên tài liệu.");
         }
 
-        if (!documentAccessService.canUpload(uploader)) {
+        if (!documentAccessService.canUpload(uploader) && !isProjectLeaderUploadException(uploader, accessLevel, projectIds)) {
             throw new SecurityException("Bạn không có quyền tải lên tài liệu.");
         }
 
