@@ -651,10 +651,13 @@ public class DocumentService {
             if (RoleConstants.isHighLevel(roleCode)) {
                 canDelete = true;
             } else if (RoleConstants.ROLE_MANAGER.equals(roleCode)
-                    && doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(requester.getId())) {
+                    && doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(requester.getId())
+                    && doc.getStatus() != DocumentStatus.REJECTED) {
                 // Chặn tường minh theo role thay vì chỉ dựa vào bất biến ngầm
                 // "EMPLOYEE không thể là uploader" — EMPLOYEE không được xóa
-                // document dù vô tình là owner.
+                // document dù vô tình là owner. REJECTED bị loại: tài liệu bị Giám
+                // đốc từ chối vẫn được giữ lại làm lịch sử (xem rejectDocument()) —
+                // Trưởng phòng vẫn xem lại được nhưng không được tự xóa để xóa dấu vết.
                 canDelete = true;
             }
         }
