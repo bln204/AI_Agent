@@ -79,9 +79,9 @@
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200">
                             <th class="px-6 py-4 font-semibold text-slate-700">Tên Tài Liệu</th>
-                            <th class="px-6 py-4 font-semibold text-slate-700">Phòng/Dự án</th>
-                            <th class="px-6 py-4 font-semibold text-slate-700">Quyền</th>
-                            <th class="px-6 py-4 font-semibold text-slate-700" th:if="${view != 'approved'}">Trạng thái</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-center">Phòng/Dự án</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-center">Quyền</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-center" th:if="${view != 'approved'}">Trạng thái</th>
                             <th class="px-6 py-4 font-semibold text-slate-700 text-right">Hành Động</th>
                         </tr>
                     </thead>
@@ -94,8 +94,8 @@
                                       class="font-bold text-slate-900 block" th:text="${doc.title}">Tên tài liệu</span>
                                 <div class="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider font-semibold" th:text="${doc.fileType != null ? doc.fileType : 'Unknown'}">PDF</div>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="flex flex-wrap gap-1.5">
+                            <td class="px-6 py-4 text-center">
+                                <div class="flex flex-wrap justify-center gap-1.5">
                                     <!-- Only show departments if access level is DEPARTMENT -->
                                     <th:block th:if="${doc.accessLevel.name() == 'DEPARTMENT'}">
                                         <span th:each="dept : ${doc.departments}" class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-medium border border-emerald-100" th:text="${dept.name}">IT</span>
@@ -110,7 +110,7 @@
                                     <span th:if="${(doc.accessLevel.name() == 'DEPARTMENT' and doc.departments.isEmpty()) or (doc.accessLevel.name() == 'PROJECT' and doc.projects.isEmpty()) or (doc.accessLevel.name() == 'PUBLIC')}" class="text-slate-300">—</span>
                                 </div>
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 text-center">
                                 <span th:class="'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ' +
                                               (${doc.accessLevel.name() == 'PUBLIC'} ? 'bg-indigo-100 text-indigo-700' :
                                               (${doc.accessLevel.name() == 'PROJECT'} ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'))"
@@ -118,7 +118,7 @@
                                                 (doc.accessLevel == T(com.aiagent.model.AccessLevel).PROJECT ? '📂 Dự án' : '🏢 Phòng ban')}">
                                 </span>
                             </td>
-                            <td class="px-6 py-4" th:if="${view != 'approved'}">
+                            <td class="px-6 py-4 text-center" th:if="${view != 'approved'}">
                                 <span th:class="'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ' +
                                               (${doc.status.name() == 'PENDING_APPROVAL'} ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700')"
                                       th:text="${doc.status.name() == 'PENDING_APPROVAL' ? '⏳ Chờ duyệt' : '✖️ Đã từ chối'}">
