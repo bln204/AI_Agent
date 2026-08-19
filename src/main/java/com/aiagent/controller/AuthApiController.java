@@ -3,7 +3,6 @@ package com.aiagent.controller;
 import com.aiagent.dto.AuthResponse;
 import com.aiagent.dto.GoogleLoginRequest;
 import com.aiagent.dto.LoginRequest;
-import com.aiagent.dto.RegisterRequest;
 import com.aiagent.service.AuthService;
 import com.aiagent.service.RateLimiterService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,16 +18,6 @@ public class AuthApiController {
 
           private final AuthService authService;
           private final RateLimiterService rateLimiterService;
-
-          @PostMapping("/register")
-          public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest registerRequest) {
-                    AuthResponse response = authService.register(registerRequest);
-                    if (response.isSuccess()) {
-                              return ResponseEntity.status(HttpStatus.CREATED).body(response);
-                    } else {
-                              return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-                    }
-          }
 
           // AuthRateLimitFilter đã chặn theo IP thô cho path này (chống flood thuần
           // túy). Ở đây thêm 1 lớp chặn theo IP+email (giống hệt key mà /login/form
