@@ -164,4 +164,76 @@ class DocumentServiceTest {
         verify(documentRepository, atLeastOnce()).save(argThat(doc -> doc.getDepartments().size() == 1 &&
                 doc.getDepartments().iterator().next().getCode().equals("IT")));
     }
+
+    // --- deleteDocument ---
+
+    private User managerUser(long id) {
+        User u = new User();
+        u.setId(id);
+        Role role = new Role();
+        role.setCode(RoleConstants.ROLE_MANAGER);
+        u.setRole(role);
+        return u;
+    }
+
+    private User directorUser(long id) {
+        User u = new User();
+        u.setId(id);
+        Role role = new Role();
+        role.setCode(RoleConstants.ROLE_DIRECTOR);
+        u.setRole(role);
+        return u;
+    }
+
+    private Document ownedDocument(long docId, User owner, com.aiagent.model.DocumentStatus status) {
+        Document doc = new Document();
+        doc.setId(docId);
+        doc.setUploadedBy(owner);
+        doc.setStatus(status);
+        return doc;
+    }
+
+    @Test
+    void deleteDocument_managerOwnRejectedDocument_throwsSecurityException() {
+        User manager = managerUser(2L);
+        Document rejected = ownedDocument(50L, manager, com.aiagent.model.DocumentStatus.REJECTED);
+        when(documentRepository.findById(50L)).thenReturn(Optional.of(rejected));
+
+        assertThrows(SecurityException.class, () -> documentService.deleteDocument(50L, manager));
+        verify(documentRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteDocument_managerOwnPendingDocument_isAllowed() {
+        User manager = managerUser(2L);
+        Document pending = ownedDocument(51L, manager, com.aiagent.model.DocumentStatus.PENDING_APPROVAL);
+        when(documentRepository.findById(51L)).thenReturn(Optional.of(pending));
+
+        documentService.deleteDocument(51L, manager);
+
+        verify(documentRepository).delete(pending);
+    }
+
+    @Test
+    void deleteDocument_managerOwnApprovedDocument_isAllowed() {
+        User manager = managerUser(2L);
+        Document approved = ownedDocument(52L, manager, com.aiagent.model.DocumentStatus.APPROVED);
+        when(documentRepository.findById(52L)).thenReturn(Optional.of(approved));
+
+        documentService.deleteDocument(52L, manager);
+
+        verify(documentRepository).delete(approved);
+    }
+
+    @Test
+    void deleteDocument_directorCanDeleteRejectedDocument() {
+        User manager = managerUser(2L);
+        User director = directorUser(9L);
+        Document rejected = ownedDocument(53L, manager, com.aiagent.model.DocumentStatus.REJECTED);
+        when(documentRepository.findById(53L)).thenReturn(Optional.of(rejected));
+
+        documentService.deleteDocument(53L, director);
+
+        verify(documentRepository).delete(rejected);
+    }
 }
