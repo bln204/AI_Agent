@@ -81,6 +81,8 @@ public class RagReindexService {
                 // rỗng, ingestDocumentSync's own guard sẽ ABORT thay vì lộ dữ liệu.
                 String accessLevel = (doc.getAccessLevel() != null) ? doc.getAccessLevel().name() : "DEPARTMENT";
                 String approverName = (doc.getApprovedBy() != null) ? doc.getApprovedBy().getUsername() : null;
+                String approverRole = (doc.getApprovedBy() != null && doc.getApprovedBy().getRole() != null)
+                        ? doc.getApprovedBy().getRole().getName() : null;
 
                 documentIngestionService.ingestDocumentSync(
                         doc.getFilePath(),
@@ -103,6 +105,7 @@ public class RagReindexService {
                         doc.getCreatedAt(),
                         doc.getVersion(),
                         approverName,
+                        approverRole,
                         doc.getApprovedAt()
                 );
                 

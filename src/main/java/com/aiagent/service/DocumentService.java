@@ -370,6 +370,12 @@ public class DocumentService {
         // upload time for DIRECTOR/ADMIN, or flipped by approveDocument() for a
         // MANAGER submission), so approvedBy/approvedAt are always populated here.
         String approverName = savedDoc.getApprovedBy() != null ? savedDoc.getApprovedBy().getUsername() : null;
+        // RAG source citation must never guess the approver's role/title from the
+        // uploader's — read it from the actual approver account instead (approveDocument()
+        // only ever lets a DIRECTOR approve a MANAGER's document; a DIRECTOR/ADMIN upload
+        // is self-approved, so this is the uploader's own role in that case).
+        String approverRole = (savedDoc.getApprovedBy() != null && savedDoc.getApprovedBy().getRole() != null)
+                ? savedDoc.getApprovedBy().getRole().getName() : null;
 
         log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
                 savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
@@ -386,7 +392,7 @@ public class DocumentService {
                         savedDoc.isInternalSourceFlag(),
                         savedDoc.getAccessLevel().name(),
                         resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion(),
-                        approverName, savedDoc.getApprovedAt());
+                        approverName, approverRole, savedDoc.getApprovedAt());
             } else {
                 // No pre-split chunks available (approveDocument path, or the
                 // original upload had no extractable text) — from-disk pipeline.
@@ -397,7 +403,7 @@ public class DocumentService {
                         savedDoc.isInternalSourceFlag(),
                         savedDoc.getAccessLevel().name(),
                         resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion(),
-                        approverName, savedDoc.getApprovedAt());
+                        approverName, approverRole, savedDoc.getApprovedAt());
             }
         } catch (Exception e) {
             log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
