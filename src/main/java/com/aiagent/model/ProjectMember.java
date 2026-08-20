@@ -29,6 +29,13 @@ public class ProjectMember {
     @Column(nullable = false)
     private boolean active = true;
 
+    // Leader của DỰ ÁN cụ thể này -- khái niệm per-project, độc lập với role hệ
+    // thống (DIRECTOR/MANAGER/EMPLOYEE). Chỉ tối đa 1 thành viên isLeader=true
+    // cho mỗi project; bất biến này được ProjectService.setLeader() đảm bảo ở
+    // tầng service (không có DB constraint cho "unique per project" kiểu này).
+    @Column(name = "is_leader", nullable = false)
+    private boolean isLeader = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

@@ -63,7 +63,7 @@
             listEl.innerHTML = '';
             items.forEach((n) => {
                 const el = document.createElement('a');
-                el.href = n.documentId ? ('/documents/' + n.documentId) : '#';
+                el.href = n.documentId ? ('/documents/' + n.documentId) : (n.projectId ? ('/projects/' + n.projectId) : '#');
                 el.className = 'notif-item' + (n.read ? '' : ' unread');
                 el.innerHTML = '<span>' + n.message + '</span><span class="notif-time">' + timeAgo(n.createdAt) + '</span>';
                 el.addEventListener('click', () => {
