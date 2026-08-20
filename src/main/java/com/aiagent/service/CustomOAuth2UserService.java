@@ -44,6 +44,18 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> createNewGoogleUser(email, googleId, name, picture));
 
+        // Tài khoản không ACTIVE (Tạm ngưng/vô hiệu hoá) phải bị chặn đăng
+        // nhập bất kể phương thức nào — CustomUserDetailsService (form login)
+        // đã chặn từ trước, nhưng đường Google OAuth2 này lại thiếu check
+        // tương đương nên tài khoản bị tạm ngưng vẫn login được qua Google.
+        // Chặn ngay tại đây, TRƯỚC khi cập nhật/lưu googleId hay avatar.
+        if (!"ACTIVE".equals(user.getStatus())) {
+            log.warn("Từ chối đăng nhập Google cho tài khoản không ACTIVE: {}", email);
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error("account_suspended"),
+                    "Không thể đăng nhập bằng Google. Vui lòng thử lại.");
+        }
+
         // Cập nhật googleId & avatar nếu chưa có
         if (user.getGoogleId() == null) {
             user.setGoogleId(googleId);

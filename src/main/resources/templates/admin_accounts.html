@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Tài Khoản - AI Agent</title>
+    <div th:replace="~{fragments/head_links :: head_links}"></div>
+</head>
+<body>
+<div class="docs-page flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/sidebar :: sidebar('accounts')}"></div>
+
+    <!-- Main -->
+    <main class="docs-main flex-1 flex flex-col bg-slate-50 overflow-hidden">
+        <!-- Header -->
+        <div th:replace="~{fragments/header :: header('👤 Quản Lý Tài Khoản', 'Tạo, tạm ngưng và xoá tài khoản đăng nhập hệ thống')}"></div>
+
+        <div class="docs-content flex-1 overflow-y-auto p-6">
+
+            <!-- Thông báo -->
+            <div th:if="${success}" class="mb-6 p-4 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl flex items-center gap-3">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span th:text="${success}" class="font-medium text-sm"></span>
+            </div>
+            <div th:if="${error}" class="mb-6 p-4 bg-red-50 text-red-700 border border-red-100 rounded-xl flex items-center gap-3">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span th:text="${error}" class="font-medium text-sm"></span>
+            </div>
+
+            <!-- Form tạo tài khoản mới -->
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">➕ Tạo Tài Khoản Mới</h2>
+                <form th:action="@{/admin/accounts}" method="post" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-slate-600">Họ tên / Tên đăng nhập</label>
+                        <input type="text" name="username" required maxlength="255"
+                               class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                               placeholder="Nguyễn Văn A">
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-slate-600">Email đăng nhập</label>
+                        <input type="email" name="email" required maxlength="255"
+                               class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                               placeholder="ten@congty.com">
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-slate-600">Mật khẩu</label>
+                        <input type="password" name="password" required minlength="6"
+                               class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                               placeholder="Tối thiểu 6 ký tự">
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-slate-600">Phòng ban</label>
+                        <select name="departmentId" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm">
+                            <option th:each="dept : ${departments}" th:value="${dept.id}" th:text="${dept.name}"></option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs font-semibold text-slate-600">Vai trò</label>
+                        <select name="roleId" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm">
+                            <option th:each="role : ${roles}" th:value="${role.id}" th:text="${role.name}"
+                                    th:selected="${role.code == 'EMPLOYEE'}"></option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-5">
+                        <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20">
+                            Tạo tài khoản
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Danh sách tài khoản -->
+            <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table class="w-full text-left text-sm" th:if="${!accounts.isEmpty()}">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-6 py-4 font-semibold text-slate-700">Tài Khoản</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-center">Phòng Ban</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-center">Vai Trò</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-center">Trạng Thái</th>
+                            <th class="px-6 py-4 font-semibold text-slate-700 text-right">Hành Động</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr th:each="acc : ${accounts}" class="hover:bg-slate-50/50 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="font-bold text-slate-900" th:text="${acc.username}">Tên</div>
+                                <div class="text-[11px] text-slate-400" th:text="${acc.email}">email</div>
+                                <span th:if="${currentUser.id == acc.id}" class="inline-block mt-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-semibold">Tài khoản của bạn</span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span th:text="${acc.department != null ? acc.department.name : '—'}" class="text-slate-600 text-xs">—</span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-700"
+                                      th:text="${acc.role != null ? acc.role.name : '—'}">—</span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <!-- Tick để đổi trạng thái ACTIVE <-> SUSPENDED -->
+                                <form th:action="@{/admin/accounts/{id}/toggle-status(id=${acc.id})}" method="post" class="inline-flex items-center gap-2 justify-center"
+                                      onsubmit="return confirm('Xác nhận đổi trạng thái tài khoản này?');">
+                                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                                    <label class="inline-flex items-center gap-2 cursor-pointer" th:classappend="${currentUser.id == acc.id} ? 'opacity-40 pointer-events-none' : ''">
+                                        <input type="checkbox" th:checked="${acc.status == 'ACTIVE'}"
+                                               th:disabled="${currentUser.id == acc.id}"
+                                               onchange="this.form.submit()"
+                                               class="sr-only peer">
+                                        <span class="w-10 h-5 flex items-center bg-slate-300 peer-checked:bg-emerald-500 rounded-full p-0.5 transition-colors">
+                                            <span class="w-4 h-4 bg-white rounded-full shadow transform transition-transform peer-checked:translate-x-5"></span>
+                                        </span>
+                                        <span th:text="${acc.status == 'ACTIVE'} ? '🟢 Hoạt động' : '⏸️ Tạm ngưng'" class="text-xs font-semibold text-slate-600"></span>
+                                    </label>
+                                </form>
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <form th:if="${currentUser.id != acc.id}"
+                                      th:action="@{/admin/accounts/{id}/delete(id=${acc.id})}" method="post" class="inline"
+                                      onsubmit="return confirm('Bạn có chắc chắn muốn xoá tài khoản này khỏi hệ thống? Hành động này không thể hoàn tác.');">
+                                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                                    <button type="submit" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Xoá tài khoản">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Empty state -->
+                <div class="py-20 text-center" th:if="${accounts.isEmpty()}">
+                    <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">👤</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">Chưa có tài khoản nào</h3>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>
