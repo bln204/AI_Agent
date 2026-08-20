@@ -1,5 +1,7 @@
 package com.aiagent.service;
 
+import com.aiagent.model.Department;
+import com.aiagent.model.GoogleUserPending;
 import com.aiagent.model.Role;
 import com.aiagent.model.User;
 import com.aiagent.repository.DepartmentRepository;
@@ -9,9 +11,19 @@ import com.aiagent.repository.UserRepository;
 import com.aiagent.util.RoleConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Covers the Google-login authority mapping bug fix: CustomOAuth2UserService
@@ -29,15 +41,19 @@ import static org.mockito.Mockito.mock;
  */
 class CustomOAuth2UserServiceTest {
 
+    private UserRepository userRepository;
+    private GoogleUserPendingRepository pendingRepository;
+    private RoleRepository roleRepository;
+    private DepartmentRepository departmentRepository;
     private CustomOAuth2UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new CustomOAuth2UserService(
-                mock(UserRepository.class),
-                mock(GoogleUserPendingRepository.class),
-                mock(RoleRepository.class),
-                mock(DepartmentRepository.class));
+        userRepository = mock(UserRepository.class);
+        pendingRepository = mock(GoogleUserPendingRepository.class);
+        roleRepository = mock(RoleRepository.class);
+        departmentRepository = mock(DepartmentRepository.class);
+        service = new CustomOAuth2UserService(userRepository, pendingRepository, roleRepository, departmentRepository);
     }
 
     private User userWithRoleCode(String code) {
@@ -72,5 +88,49 @@ class CustomOAuth2UserServiceTest {
         // a privileged authority (e.g. DIRECTOR) — default to the lowest
         // privilege, mirroring CustomUserDetailsService's form-login fallback.
         assertEquals("ROLE_EMPLOYEE", service.resolveAuthority(user));
+    }
+
+    /**
+     * Google login must not be a backdoor self-registration path once
+     * /register is removed: an unknown Google email with no admin-created
+     * GoogleUserPending record has to be rejected, not silently signed up
+     * as a new EMPLOYEE.
+     */
+    @Test
+    void createNewGoogleUser_noPendingRecord_isRejected_andNoUserIsPersisted() {
+        when(pendingRepository.findByEmail("stranger@gmail.com")).thenReturn(Optional.empty());
+
+        assertThrows(OAuth2AuthenticationException.class, () ->
+                service.createNewGoogleUser("stranger@gmail.com", "google-id-1", "Stranger", null));
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createNewGoogleUser_withPendingRecord_createsUser_withPendingDepartmentAndRole() {
+        GoogleUserPending pending = new GoogleUserPending();
+        pending.setEmail("invited@company.com");
+        pending.setDepartment("IT");
+        pending.setRole("Nhân viên");
+
+        Department department = new Department();
+        department.setName("IT");
+
+        Role role = new Role();
+        role.setName("Nhân viên");
+        role.setCode(RoleConstants.ROLE_EMPLOYEE);
+
+        when(pendingRepository.findByEmail("invited@company.com")).thenReturn(Optional.of(pending));
+        when(departmentRepository.findByName("IT")).thenReturn(Optional.of(department));
+        when(roleRepository.findByName("Nhân viên")).thenReturn(Optional.of(role));
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+        when(userRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User created = service.createNewGoogleUser("invited@company.com", "google-id-2", "Invited Person", "http://pic");
+
+        assertEquals("invited@company.com", created.getEmail());
+        assertEquals(department, created.getDepartment());
+        assertEquals(role, created.getRole());
+        verify(userRepository).save(created);
     }
 }

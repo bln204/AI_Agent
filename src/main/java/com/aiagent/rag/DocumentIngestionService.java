@@ -38,8 +38,8 @@ public class DocumentIngestionService {
                                  String classification, String projectName, String description, boolean internalSourceFlag,
                                  String accessLevel,
                                  List<Long> departmentIds, List<Long> projectIds, java.time.LocalDateTime createdAt, Integer version,
-                                 String approverName, java.time.LocalDateTime approvedAt) {
-        ingestDocumentSync(filePath, documentId, documentUuid, title, fileType, userId, userName, uploaderRole, department, decisionNumber, classification, projectName, description, internalSourceFlag, accessLevel, departmentIds, projectIds, createdAt, version, approverName, approvedAt);
+                                 String approverName, String approverRole, java.time.LocalDateTime approvedAt) {
+        ingestDocumentSync(filePath, documentId, documentUuid, title, fileType, userId, userName, uploaderRole, department, decisionNumber, classification, projectName, description, internalSourceFlag, accessLevel, departmentIds, projectIds, createdAt, version, approverName, approverRole, approvedAt);
     }
 
     public void ingestDocumentSync(String filePath, Long documentId, String documentUuid, String title, String fileType,
@@ -47,7 +47,7 @@ public class DocumentIngestionService {
                                     String classification, String projectName, String description, boolean internalSourceFlag,
                                     String accessLevel,
                                     List<Long> departmentIds, List<Long> projectIds, java.time.LocalDateTime createdAt, Integer version,
-                                    String approverName, java.time.LocalDateTime approvedAt) {
+                                    String approverName, String approverRole, java.time.LocalDateTime approvedAt) {
         if (filePath == null) {
             log.error("File path is missing for document ID: {}", documentId);
             return;
@@ -120,7 +120,7 @@ public class DocumentIngestionService {
 
             upsertChunks(splitDocuments, documentId, documentUuid, title, fileType, userId, userName, uploaderRole,
                     department, decisionNumber, classification, projectName, description, internalSourceFlag,
-                    accessLevel, departmentIds, projectIds, createdAt, version, approverName, approvedAt, startTime);
+                    accessLevel, departmentIds, projectIds, createdAt, version, approverName, approverRole, approvedAt, startTime);
         } catch (Exception e) {
             log.error("❌ QUÁ TRÌNH INGESTION BỊ CHẶN LẠI HOẶC LỖI CHO DOC ID {}:", documentId, e);
             throw new RuntimeException("Ingestion failed: " + e.getMessage(), e);
@@ -143,7 +143,7 @@ public class DocumentIngestionService {
                                     String decisionNumber, String classification, String projectName, String description,
                                     boolean internalSourceFlag, String accessLevel,
                                     List<Long> departmentIds, List<Long> projectIds, java.time.LocalDateTime createdAt, Integer version,
-                                    String approverName, java.time.LocalDateTime approvedAt) {
+                                    String approverName, String approverRole, java.time.LocalDateTime approvedAt) {
         if (preSplitChunks == null || preSplitChunks.isEmpty()) {
             log.warn("[INGEST-PRE-EXTRACTED] No pre-split chunks supplied for Doc ID: {}. SKIP INDEXING.", documentId);
             return;
@@ -157,7 +157,7 @@ public class DocumentIngestionService {
         try {
             upsertChunks(preSplitChunks, documentId, documentUuid, title, fileType, userId, userName, uploaderRole,
                     department, decisionNumber, classification, projectName, description, internalSourceFlag,
-                    accessLevel, departmentIds, projectIds, createdAt, version, approverName, approvedAt, startTime);
+                    accessLevel, departmentIds, projectIds, createdAt, version, approverName, approverRole, approvedAt, startTime);
         } catch (Exception e) {
             log.error("❌ QUÁ TRÌNH INGESTION (pre-extracted) BỊ CHẶN LẠI HOẶC LỖI CHO DOC ID {}:", documentId, e);
             throw new RuntimeException("Ingestion failed: " + e.getMessage(), e);
@@ -188,7 +188,7 @@ public class DocumentIngestionService {
                                String decisionNumber, String classification, String projectName, String description,
                                boolean internalSourceFlag, String accessLevel,
                                List<Long> departmentIds, List<Long> projectIds, java.time.LocalDateTime createdAt, Integer version,
-                               String approverName, java.time.LocalDateTime approvedAt,
+                               String approverName, String approverRole, java.time.LocalDateTime approvedAt,
                                long pipelineStartTime) {
 
         final String resolvedTitle = (title != null) ? title : ("document-" + documentId);
@@ -208,6 +208,11 @@ public class DocumentIngestionService {
         // gate lives in DocumentService), so approverName/approvedAt should always be
         // present -- default here is just defense against a caller that forgets to pass them.
         final String resolvedApproverName = (approverName != null && !approverName.isBlank()) ? approverName : "Chưa xác định";
+        // Ground truth for the approver's title in the RAG citation -- deliberately
+        // "UNKNOWN" (not a guess like "Trưởng phòng"/"Giám đốc") when the caller didn't
+        // supply it, so the prompt can tell the model to omit the title rather than
+        // ever inferring/copying it from the uploader's role.
+        final String resolvedApproverRole = (approverRole != null && !approverRole.isBlank()) ? approverRole : "UNKNOWN";
         final String formattedApprovedDate = (approvedAt != null)
                 ? java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(approvedAt)
                 : "Chưa xác định";
@@ -239,6 +244,7 @@ public class DocumentIngestionService {
             metadata.put("department", department != null ? department : "UNKNOWN");
             metadata.put("decision_number", decisionNumber != null ? decisionNumber : "N/A");
             metadata.put("approver_name", resolvedApproverName);
+            metadata.put("approver_role", resolvedApproverRole);
             metadata.put("approved_date", formattedApprovedDate);
             metadata.put("classification", classification != null ? classification : "OTHER");
             metadata.put("project_name", projectName != null ? projectName : "N/A");

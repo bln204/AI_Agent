@@ -81,8 +81,8 @@ public class RagGroundingStabilizationTest {
         String response = ragService.processQuery(question, testUser, null, Collections.emptyList(), "");
 
         // 4. Verification
-        assertThat(response).contains("PHẦN 1:");
-        assertThat(response).contains("PHẦN 2:");
+        assertThat(response).doesNotContain("PHẦN 1:");
+        assertThat(response).doesNotContain("PHẦN 2:");
         assertThat(response).contains(mainDocName);
     }
 }

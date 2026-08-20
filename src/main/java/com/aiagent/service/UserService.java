@@ -64,6 +64,18 @@ public class UserService {
         userRepository.deleteById(id);
     }
 
+    /**
+     * Đổi trạng thái tài khoản ACTIVE <-> SUSPENDED. Tài khoản SUSPENDED bị
+     * CustomUserDetailsService chặn đăng nhập (chỉ "ACTIVE" mới login được),
+     * áp dụng ngay từ lần đăng nhập kế tiếp mà không cần thay đổi gì thêm.
+     */
+    public User toggleStatus(Long id) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+        user.setStatus("ACTIVE".equals(user.getStatus()) ? "SUSPENDED" : "ACTIVE");
+        return userRepository.save(user);
+    }
+
     public List<User> getUsersByStatus(String status) {
         return userRepository.findByStatus(status);
     }

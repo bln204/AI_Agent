@@ -51,12 +51,12 @@ class SecurityHeadersTest {
 
     @Test
     void apiResponse_hasClickjackingProtectionHeaders() throws Exception {
-        when(authService.register(any())).thenReturn(AuthResponse.builder().success(true).build());
+        when(authService.login(any())).thenReturn(AuthResponse.builder().success(true).build());
 
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/login")
                         .contentType("application/json")
-                        .content("{\"username\":\"u\",\"email\":\"u@x.com\",\"password\":\"pw\"}"))
-                .andExpect(status().isCreated())
+                        .content("{\"email\":\"u@x.com\",\"password\":\"pw\"}"))
+                .andExpect(status().isOk())
                 .andExpect(header().string("X-Frame-Options", "DENY"))
                 .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"));
     }

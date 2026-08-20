@@ -30,6 +30,11 @@ public class Notification {
     @Column(name = "document_id")
     private Long documentId;
 
+    // Cùng lý do như documentId ở trên: plain id (không @ManyToOne) để
+    // notification vẫn render được kể cả khi project bị xoá sau đó.
+    @Column(name = "project_id")
+    private Long projectId;
+
     @Column(nullable = false, length = 500)
     private String message;
 

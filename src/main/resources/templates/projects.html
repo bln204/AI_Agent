@@ -13,7 +13,7 @@
 
     <main class="flex-1 flex flex-col overflow-hidden">
         <!-- Header -->
-        <div th:replace="~{fragments/header :: header('📁 Quản Lý Dự Án', 'Quản lý các nhóm làm việc và quyền truy cập tài liệu')}"></div>
+        <div th:replace="~{fragments/header :: header('📁 Dự Án', 'Danh sách các dự án')}"></div>
 
         <div class="flex-1 overflow-y-auto p-6">
             <!-- Notifications -->
@@ -24,7 +24,7 @@
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <h2 class="text-xl font-bold text-slate-800">Danh sách dự án</h2>
-                    <p class="text-sm text-slate-500">Các dự án đang hoạt động trong hệ thống</p>
+                    <p class="text-sm text-slate-500" th:text="${isDirector} ? 'Toàn bộ dự án trong hệ thống' : 'Các dự án bạn đang tham gia'"></p>
                 </div>
                 <button th:if="${canManage}" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20" onclick="openModal('createModal')">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -37,34 +37,32 @@
                 <div th:each="proj : ${projects}" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all group">
                     <div class="flex justify-between items-start mb-4">
                         <h3 class="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors" th:text="${proj.name}">Tên dự án</h3>
-                        <span th:class="|px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${proj.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}|" 
-                              th:text="${proj.active ? 'Đang chạy' : 'Tạm dừng'}"></span>
+                        <span th:class="|px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    proj.status.name() == 'RUNNING' ? 'bg-emerald-100 text-emerald-700' :
+                                    proj.status.name() == 'PAUSED' ? 'bg-amber-100 text-amber-700' :
+                                    proj.status.name() == 'COMPLETED' ? 'bg-slate-200 text-slate-600' :
+                                    'bg-indigo-100 text-indigo-700'}|"
+                              th:text="${
+                                    proj.status.name() == 'RUNNING' ? 'Đang chạy' :
+                                    proj.status.name() == 'PAUSED' ? 'Tạm dừng' :
+                                    proj.status.name() == 'COMPLETED' ? 'Hoàn thành' :
+                                    'Gia hạn dự án'}"></span>
                     </div>
                     <p class="text-slate-500 text-sm leading-relaxed mb-6 h-15 line-clamp-3" th:text="${proj.description ?: 'Chưa có mô tả chi tiết cho dự án này.'}"></p>
-                    
+
                     <div class="pt-4 border-t border-slate-100 flex gap-2">
-                        <a th:href="@{/projects/{id}/members(id=${proj.id})}" class="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold transition-colors border border-slate-200">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                            Thành viên
+                        <a th:href="@{/projects/{id}(id=${proj.id})}" class="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold transition-colors border border-slate-200">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            Xem chi tiết
                         </a>
 
-                        <th:block th:if="${canManage}">
-                            <button class="btn-edit-project p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                    th:data-id="${proj.id}"
-                                    th:data-name="${proj.name}"
-                                    th:data-desc="${proj.description}"
-                                    th:data-active="${proj.active}"
-                                    title="Chỉnh sửa">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        <form th:if="${canManage}" th:action="@{/projects/delete/{id}(id=${proj.id})}" method="post"
+                              onsubmit="if(confirm('Bạn có chắc chắn muốn xoá dự án này?')) { this.querySelector('button').disabled = true; return true; } return false;" class="m-0">
+                            <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                            <button type="submit" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Xoá">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                             </button>
-                            <form th:action="@{/projects/delete/{id}(id=${proj.id})}" method="post"
-                                  onsubmit="if(confirm('Bạn có chắc chắn muốn xoá dự án này?')) { this.querySelector('button').disabled = true; return true; } return false;" class="m-0">
-                                <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
-                                <button type="submit" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Xoá">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                                </button>
-                            </form>
-                        </th:block>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -72,8 +70,9 @@
             <!-- Empty State -->
             <div class="py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200" th:if="${projects.isEmpty()}">
                 <span class="text-6xl mb-6 block">📁</span>
-                <h3 class="text-xl font-bold text-slate-800 mb-2">Không tìm thấy dự án</h3>
-                <p class="text-slate-500 mb-8 max-w-xs mx-auto">Hiện tại chưa có dự án nào được tạo trong hệ thống.</p>
+                <h3 class="text-xl font-bold text-slate-800 mb-2" th:if="${isDirector}">Không tìm thấy dự án</h3>
+                <p class="text-slate-500 mb-8 max-w-xs mx-auto" th:if="${isDirector}">Hiện tại chưa có dự án nào được tạo trong hệ thống.</p>
+                <h3 class="text-xl font-bold text-slate-800 mb-2" th:unless="${isDirector}">Bạn không đang tham gia dự án nào.</h3>
                 <button th:if="${canManage}" class="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/25" onclick="openModal('createModal')">
                     Bắt đầu dự án đầu tiên
                 </button>
@@ -83,62 +82,64 @@
 </div>
 
 <!-- Modal Create -->
-<div id="createModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
-    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+<div id="createModal" th:if="${canManage}" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200 my-8">
         <div class="p-6 border-b border-slate-100 flex justify-between items-center">
             <h2 class="text-xl font-bold text-slate-900">Tạo dự án mới</h2>
-            <button onclick="closeModal('createModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+            <button type="button" onclick="closeModal('createModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
-        <form th:action="@{/projects/create}" method="post" class="p-6">
+        <form th:action="@{/projects/create}" method="post" enctype="multipart/form-data" class="p-6">
             <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">Tên dự án</label>
                     <input type="text" name="name" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" placeholder="Nhập tên dự án..." required>
                 </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Ngày bắt đầu</label>
+                        <input type="date" name="startDate" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Ngày dự kiến kết thúc</label>
+                        <input type="date" name="expectedEndDate" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Loại dự án</label>
+                        <input type="text" name="projectType" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" placeholder="VD: Nội bộ, Khách hàng...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Chi phí dự án</label>
+                        <input type="number" step="0.01" min="0" name="cost" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" placeholder="0">
+                    </div>
+                </div>
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">Mô tả</label>
-                    <textarea name="description" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" rows="4" placeholder="Nhập mô tả chi tiết..."></textarea>
+                    <textarea name="description" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" rows="3" placeholder="Nhập mô tả chi tiết..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Thành viên tham gia dự án (tick chọn 1 người làm leader)</label>
+                    <div class="member-picker" data-field-member="memberIds" data-field-leader="leaderId">
+                        <div class="relative">
+                            <input type="text" class="mp-input w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm" placeholder="Tìm nhân viên theo tên..." autocomplete="off">
+                            <div class="mp-suggestions hidden absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto"></div>
+                        </div>
+                        <div class="mp-selected mt-3 space-y-2"></div>
+                        <div class="mp-hidden-inputs"></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Hồ sơ tài liệu dự án (tuỳ chọn)</label>
+                    <input type="file" name="files" multiple class="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-600 file:font-bold">
                 </div>
             </div>
             <div class="mt-8 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('createModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
                 <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Lưu dự án</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Modal Edit -->
-<div id="editModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
-    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
-        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-            <h2 class="text-xl font-bold text-slate-900">Chỉnh sửa dự án</h2>
-            <button onclick="closeModal('editModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-        </div>
-        <form id="editForm" method="post" class="p-6">
-            <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Tên dự án</label>
-                    <input type="text" name="name" id="editName" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Mô tả</label>
-                    <textarea name="description" id="editDesc" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" rows="4"></textarea>
-                </div>
-                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <input type="checkbox" name="active" id="editActive" value="true" class="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500">
-                    <label for="editActive" class="text-sm font-bold text-slate-700 cursor-pointer">Đang hoạt động</label>
-                </div>
-            </div>
-            <div class="mt-8 flex justify-end gap-3">
-                <button type="button" onclick="closeModal('editModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
-                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Cập nhật</button>
             </div>
         </form>
     </div>
@@ -156,26 +157,26 @@
         modal.classList.remove('flex');
     }
 
-    document.querySelectorAll('.btn-edit-project').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var id = this.dataset.id;
-            var name = this.dataset.name || '';
-            var desc = this.dataset.desc || '';
-            var active = this.dataset.active === 'true';
-            document.getElementById('editForm').action = '/projects/' + id + '/update';
-            document.getElementById('editName').value = name;
-            document.getElementById('editDesc').value = desc;
-            document.getElementById('editActive').checked = active;
-            openModal('editModal');
-        });
-    });
-
     window.onclick = function(event) {
         if (event.target.id && event.target.id.includes('Modal')) {
             closeModal(event.target.id);
         }
     }
 </script>
+<script th:if="${canManage}" th:inline="javascript">
+    window.ALL_USERS = [
+        /*[# th:each="u : ${allUsers}"]*/
+        {
+            id: /*[[${u.id}]]*/ 0,
+            username: /*[[${u.username}]]*/ '',
+            avatarUrl: /*[[${u.avatarUrl}]]*/ null,
+            department: /*[[${u.department != null ? u.department.name : ''}]]*/ '',
+            role: /*[[${u.role != null ? u.role.name : ''}]]*/ ''
+        },
+        /*[/]*/
+    ];
+</script>
+<script th:if="${canManage}" src="/js/member-picker.js"></script>
 <script src="/js/notifications.js"></script>
 </body>
 </html>

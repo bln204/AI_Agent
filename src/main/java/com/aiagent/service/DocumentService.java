@@ -115,6 +115,24 @@ public class DocumentService {
     private final com.aiagent.service.DecisionNumberService decisionNumberService;
     private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
+    /**
+     * Ngoại lệ hẹp, có chủ đích (business decision, xem DocumentAccessService.
+     * canUploadToProject): một EMPLOYEE làm leader của 1 dự án cụ thể được
+     * phép upload tài liệu CHỈ khi accessLevel=PROJECT và MỌI project trong
+     * projectIds đều do chính họ làm leader -- không được lợi dụng ô chọn
+     * nhiều dự án ở trang /documents chung để gắn vào dự án họ không lãnh đạo.
+     * Rule "Nhân viên không được upload tài liệu" (canUpload) không đổi cho
+     * mọi trường hợp khác.
+     */
+    private boolean isProjectLeaderUploadException(User uploader, AccessLevel accessLevel, List<Long> projectIds) {
+        if (!AccessLevel.PROJECT.equals(accessLevel) || projectIds == null || projectIds.isEmpty()) {
+            return false;
+        }
+        return projectIds.stream().allMatch(pid -> projectRepository.findById(pid)
+                .map(p -> documentAccessService.isProjectLeader(uploader, p))
+                .orElse(false));
+    }
+
     @Transactional
     public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
                                  java.util.List<Long> projectIds, AccessLevel accessLevel,
@@ -126,7 +144,7 @@ public class DocumentService {
             throw new SecurityException("Không có quyền tải lên tài liệu.");
         }
 
-        if (!documentAccessService.canUpload(uploader)) {
+        if (!documentAccessService.canUpload(uploader) && !isProjectLeaderUploadException(uploader, accessLevel, projectIds)) {
             throw new SecurityException("Bạn không có quyền tải lên tài liệu.");
         }
 
@@ -370,6 +388,12 @@ public class DocumentService {
         // upload time for DIRECTOR/ADMIN, or flipped by approveDocument() for a
         // MANAGER submission), so approvedBy/approvedAt are always populated here.
         String approverName = savedDoc.getApprovedBy() != null ? savedDoc.getApprovedBy().getUsername() : null;
+        // RAG source citation must never guess the approver's role/title from the
+        // uploader's — read it from the actual approver account instead (approveDocument()
+        // only ever lets a DIRECTOR approve a MANAGER's document; a DIRECTOR/ADMIN upload
+        // is self-approved, so this is the uploader's own role in that case).
+        String approverRole = (savedDoc.getApprovedBy() != null && savedDoc.getApprovedBy().getRole() != null)
+                ? savedDoc.getApprovedBy().getRole().getName() : null;
 
         log.info("[INGESTION-PREP] docId={}, title={}, accessLevel={}, deptIds={}, projIds={}",
                 savedDoc.getId(), savedDoc.getTitle(), savedDoc.getAccessLevel(), resolvedDeptIds, resolvedProjIds);
@@ -386,7 +410,7 @@ public class DocumentService {
                         savedDoc.isInternalSourceFlag(),
                         savedDoc.getAccessLevel().name(),
                         resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion(),
-                        approverName, savedDoc.getApprovedAt());
+                        approverName, approverRole, savedDoc.getApprovedAt());
             } else {
                 // No pre-split chunks available (approveDocument path, or the
                 // original upload had no extractable text) — from-disk pipeline.
@@ -397,7 +421,7 @@ public class DocumentService {
                         savedDoc.isInternalSourceFlag(),
                         savedDoc.getAccessLevel().name(),
                         resolvedDeptIds, resolvedProjIds, savedDoc.getCreatedAt(), savedDoc.getVersion(),
-                        approverName, savedDoc.getApprovedAt());
+                        approverName, approverRole, savedDoc.getApprovedAt());
             }
         } catch (Exception e) {
             log.error("Ingestion vào Qdrant thất bại cho document {}: {}", savedDoc.getId(), e.getMessage());
@@ -645,10 +669,13 @@ public class DocumentService {
             if (RoleConstants.isHighLevel(roleCode)) {
                 canDelete = true;
             } else if (RoleConstants.ROLE_MANAGER.equals(roleCode)
-                    && doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(requester.getId())) {
+                    && doc.getUploadedBy() != null && doc.getUploadedBy().getId().equals(requester.getId())
+                    && doc.getStatus() != DocumentStatus.REJECTED) {
                 // Chặn tường minh theo role thay vì chỉ dựa vào bất biến ngầm
                 // "EMPLOYEE không thể là uploader" — EMPLOYEE không được xóa
-                // document dù vô tình là owner.
+                // document dù vô tình là owner. REJECTED bị loại: tài liệu bị Giám
+                // đốc từ chối vẫn được giữ lại làm lịch sử (xem rejectDocument()) —
+                // Trưởng phòng vẫn xem lại được nhưng không được tự xóa để xóa dấu vết.
                 canDelete = true;
             }
         }

@@ -32,14 +32,6 @@ public class AuthController {
         return "login";
     }
 
-    @GetMapping("/register")
-    public String register(Authentication authentication) {
-        if (authentication != null && authentication.isAuthenticated()) {
-            return "redirect:/dashboard";
-        }
-        return "register";
-    }
-
     @GetMapping("/dashboard")
     public String dashboard(Authentication authentication, Model model) {
         if (authentication == null || !authentication.isAuthenticated()) {

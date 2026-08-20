@@ -146,8 +146,10 @@ class PromptBuilderInjectionSecurityTest {
 
     @Test
     void emptyContext_fallbackMessage_behaviorPreserved() {
-        assertEquals(
-                "PHẦN 1:\n- summary: Không tìm thấy thông tin phù hợp\n- details: Không có dữ liệu liên quan trong hệ thống.\n\nPHẦN 2:\n- sources: []",
-                promptBuilder.getFallbackMessage());
+        String fallback = promptBuilder.getFallbackMessage();
+        assertFalse(fallback.contains("PHẦN 1"), "fallback message must not use mechanical section labels");
+        assertFalse(fallback.contains("PHẦN 2"), "fallback message must not use mechanical section labels");
+        assertTrue(fallback.toLowerCase().contains("chưa tìm thấy") || fallback.toLowerCase().contains("không tìm thấy"),
+                "fallback message must still communicate that no relevant data was found");
     }
 }

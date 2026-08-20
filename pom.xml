@@ -60,6 +60,19 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Flyway: chạy tự động các file db/migration/*.sql khi app khởi động,
+             thay cho việc mỗi người phải tự chạy tay từng file SQL. Version do
+             spring-boot-starter-parent quản lý (9.22.3). flyway-mysql bắt buộc
+             kèm theo, vì flyway-core 9.22.3 báo lỗi "Unsupported Database:
+             MySQL 8.0" nếu thiếu module này (đã verify thực tế khi chạy thử). -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
 
         <!-- Utilities -->
         <dependency>

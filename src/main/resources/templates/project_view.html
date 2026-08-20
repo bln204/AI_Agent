@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chi Tiết Dự Án - AI Agent</title>
+    <div th:replace="~{fragments/head_links :: head_links}"></div>
+</head>
+<body class="bg-slate-50">
+<div class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/sidebar :: sidebar('projects')}"></div>
+
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <!-- Header -->
+        <div th:replace="~{fragments/header :: header('📁 Chi Tiết Dự Án', project.name)}"></div>
+
+        <div class="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full">
+            <a href="/projects" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-indigo-600 transition-colors mb-6 group">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="group-hover:-translate-x-1 transition-transform"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Quay lại danh sách dự án
+            </a>
+
+            <!-- Notifications -->
+            <div th:if="${success}" class="mb-6 p-4 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl flex items-center gap-3" th:text="${success}"></div>
+            <div th:if="${error}" class="mb-6 p-4 bg-red-50 text-red-700 border border-red-100 rounded-xl flex items-center gap-3" th:text="${error}"></div>
+
+            <!-- Frozen banner -->
+            <div th:if="${frozen}" class="mb-6 p-5 bg-slate-900 text-white rounded-2xl flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🧊</span>
+                    <div>
+                        <div class="font-bold">Dự án đã hết hạn và đang bị đóng băng</div>
+                        <div class="text-sm text-slate-300">Không ai chỉnh sửa được cho tới khi Giám đốc mở lại dự án.</div>
+                    </div>
+                </div>
+                <button th:if="${isDirector}" type="button" onclick="openModal('reopenModal')" class="px-5 py-2.5 bg-white text-slate-900 rounded-xl font-bold text-sm hover:bg-slate-100 transition-all whitespace-nowrap">
+                    Mở lại dự án
+                </button>
+            </div>
+
+            <!-- Pending extension banner -->
+            <div th:if="${project.pendingExtensionDate != null}" class="mb-6 p-5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">⏳</span>
+                    <div>
+                        <div class="font-bold text-amber-800">
+                            Yêu cầu gia hạn đến
+                            <span th:text="${#temporals.format(project.pendingExtensionDate, 'dd/MM/yyyy')}"></span>
+                            đang chờ Giám đốc duyệt
+                        </div>
+                        <div class="text-sm text-amber-700" th:if="${project.extensionRequestedBy != null}">
+                            Đề xuất bởi <span th:text="${project.extensionRequestedBy.username}"></span>
+                        </div>
+                    </div>
+                </div>
+                <div th:if="${isDirector}" class="flex gap-2">
+                    <form th:action="@{/projects/{id}/extension/approve(id=${project.id})}" method="post" class="m-0">
+                        <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-all">Duyệt</button>
+                    </form>
+                    <form th:action="@{/projects/{id}/extension/reject(id=${project.id})}" method="post" class="m-0">
+                        <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                        <button type="submit" class="px-4 py-2 bg-white border border-amber-300 text-amber-700 hover:bg-amber-100 rounded-xl font-bold text-sm transition-all">Từ chối</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Info card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-6">
+                <div class="flex justify-between items-start mb-6 flex-wrap gap-3">
+                    <h2 class="text-2xl font-bold text-slate-900" th:text="${project.name}">Tên dự án</h2>
+                    <span th:class="|px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                project.status.name() == 'RUNNING' ? 'bg-emerald-100 text-emerald-700' :
+                                project.status.name() == 'PAUSED' ? 'bg-amber-100 text-amber-700' :
+                                project.status.name() == 'COMPLETED' ? 'bg-slate-200 text-slate-600' :
+                                'bg-indigo-100 text-indigo-700'}|"
+                          th:text="${
+                                project.status.name() == 'RUNNING' ? 'Đang chạy' :
+                                project.status.name() == 'PAUSED' ? 'Tạm dừng' :
+                                project.status.name() == 'COMPLETED' ? 'Hoàn thành' :
+                                'Gia hạn dự án'}"></span>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-1">Ngày bắt đầu</div>
+                        <div class="font-semibold text-slate-800" th:text="${project.startDate != null ? #temporals.format(project.startDate, 'dd/MM/yyyy') : 'Chưa có'}"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-1">Ngày dự kiến kết thúc</div>
+                        <div class="font-semibold text-slate-800" th:text="${project.expectedEndDate != null ? #temporals.format(project.expectedEndDate, 'dd/MM/yyyy') : 'Chưa có'}"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-1">Ngày gia hạn</div>
+                        <div class="font-semibold text-slate-800" th:text="${project.extensionDate != null ? #temporals.format(project.extensionDate, 'dd/MM/yyyy') : '—'}"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-1">Loại dự án</div>
+                        <div class="font-semibold text-slate-800" th:text="${project.projectType ?: '—'}"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-1">Chi phí dự án</div>
+                        <div class="font-semibold text-slate-800" th:text="${project.cost != null ? #numbers.formatDecimal(project.cost, 0, 'COMMA', 0, 'POINT') : '—'}"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-xs font-bold text-slate-400 uppercase">Mô tả</div>
+                        <button th:if="${canUpdate and !frozen}" type="button" onclick="openModal('descModal')" class="text-xs font-bold text-indigo-600 hover:text-indigo-700">Sửa mô tả</button>
+                    </div>
+                    <p class="text-slate-700 leading-relaxed" th:text="${project.description ?: 'Chưa có mô tả chi tiết cho dự án này.'}"></p>
+                </div>
+            </div>
+
+            <!-- Status update -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-6" th:if="${canUpdate and !frozen}">
+                <h3 class="text-lg font-bold text-slate-900 mb-4">Cập nhật trạng thái</h3>
+                <form th:action="@{/projects/{id}/status(id=${project.id})}" method="post" class="flex flex-col gap-4" id="statusForm">
+                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                    <div class="flex gap-3 flex-wrap items-end">
+                        <div class="flex-1 min-w-[200px]">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Trạng thái</label>
+                            <select name="status" id="statusSelect" class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium" required onchange="toggleExtensionDateField()">
+                                <option value="PAUSED">Tạm dừng</option>
+                                <option value="COMPLETED">Hoàn thành</option>
+                                <option value="EXTENDED">Gia hạn dự án</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[200px] hidden" id="extensionDateWrapper">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Ngày gia hạn</label>
+                            <input type="date" name="extensionDate" id="extensionDateInput" class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium">
+                        </div>
+                        <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">Cập nhật</button>
+                    </div>
+                    <p th:if="${!isDirector}" class="text-xs text-slate-400">Chọn "Gia hạn dự án" sẽ gửi yêu cầu chờ Giám đốc duyệt.</p>
+                </form>
+            </div>
+
+            <!-- Members -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canManageMembers}">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Thêm thành viên mới</h3>
+                    <form th:action="@{/projects/{id}/members/add(id=${project.id})}" method="post">
+                        <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                        <div class="member-picker" data-field-member="memberIds" data-field-leader="leaderId" th:attr="data-exclude-ids=${memberIdsCsv}">
+                            <div class="relative">
+                                <input type="text" class="mp-input w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm" placeholder="Tìm nhân viên theo tên..." autocomplete="off">
+                                <div class="mp-suggestions hidden absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto"></div>
+                            </div>
+                            <div class="mp-selected mt-3 space-y-2"></div>
+                            <div class="mp-hidden-inputs"></div>
+                        </div>
+                        <button type="submit" class="mt-4 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-indigo-500/20">Thêm vào dự án</button>
+                    </form>
+                </div>
+
+                <div class="p-8">
+                    <h3 class="text-xl font-bold text-slate-900 mb-6">Thành viên dự án</h3>
+
+                    <div th:if="${members.isEmpty()}" class="py-12 text-center text-slate-400">
+                        <div class="text-5xl mb-4">👥</div>
+                        <p class="font-medium">Chưa có thành viên nào tham gia dự án này.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div th:each="member : ${members}" class="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 hover:border-slate-200 transition-all group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold border-2 border-white shadow-sm"
+                                     th:text="${#strings.substring(member.user.username,0,1).toUpperCase()}">U</div>
+                                <div>
+                                    <div class="font-bold text-slate-900 flex items-center gap-2">
+                                        <span th:text="${member.user.username}">Username</span>
+                                        <span th:if="${member.leader}" class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase">Leader</span>
+                                    </div>
+                                    <div class="text-xs text-slate-400 font-medium" th:text="${member.user.email}">Email</div>
+                                </div>
+                            </div>
+                            <div th:if="${canManageMembers}" class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <form th:if="${!member.leader}" th:action="@{/projects/{id}/members/set-leader(id=${project.id})}" method="post" class="m-0">
+                                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                                    <input type="hidden" name="userId" th:value="${member.user.id}">
+                                    <button type="submit" class="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg text-xs font-bold transition-all border border-transparent hover:border-indigo-100">Đặt làm leader</button>
+                                </form>
+                                <form th:action="@{/projects/{id}/members/remove(id=${project.id})}" method="post" onsubmit="return confirm('Loại bỏ thành viên này khỏi dự án?')" class="m-0">
+                                    <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                                    <input type="hidden" name="userId" th:value="${member.user.id}">
+                                    <button type="submit" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-xs font-bold transition-all border border-transparent hover:border-red-100">Gỡ bỏ</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documents -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canUploadDocs}">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Tải lên hồ sơ tài liệu</h3>
+                    <form th:action="@{/projects/{id}/documents/upload(id=${project.id})}" method="post" enctype="multipart/form-data" class="flex flex-col md:flex-row gap-3">
+                        <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+                        <input type="text" name="title" placeholder="Tiêu đề tài liệu" class="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium" required>
+                        <input type="file" name="file" class="flex-1 text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-600 file:font-bold" required>
+                        <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">Tải lên</button>
+                    </form>
+                </div>
+
+                <div class="p-8">
+                    <h3 class="text-xl font-bold text-slate-900 mb-6">Hồ sơ tài liệu dự án</h3>
+
+                    <div th:if="${documents.isEmpty()}" class="py-12 text-center text-slate-400">
+                        <div class="text-5xl mb-4">📄</div>
+                        <p class="font-medium">Chưa có tài liệu nào trong dự án này.</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div th:each="doc : ${documents}" class="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all">
+                            <div class="flex items-center gap-3">
+                                <span class="text-xl">📄</span>
+                                <div>
+                                    <a th:if="${canViewDocDetail}" th:href="@{/documents/{id}(id=${doc.id})}" class="font-bold text-slate-900 hover:text-indigo-600" th:text="${doc.title}">Tài liệu</a>
+                                    <span th:unless="${canViewDocDetail}" class="font-bold text-slate-900" th:text="${doc.title}">Tài liệu</span>
+                                    <div class="text-xs text-slate-400 font-medium" th:text="${doc.uploaderName}">Người tải lên</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modal: Sửa mô tả -->
+<div id="descModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-slate-900">Sửa mô tả dự án</h2>
+            <button type="button" onclick="closeModal('descModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form th:action="@{/projects/{id}/update(id=${project.id})}" method="post" class="p-6">
+            <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+            <textarea name="description" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" rows="5" th:text="${project.description}"></textarea>
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeModal('descModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Lưu</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Mở lại dự án (Director, Case 2) -->
+<div id="reopenModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4" th:if="${isDirector}">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-slate-900">Mở lại dự án</h2>
+            <button type="button" onclick="closeModal('reopenModal')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form th:action="@{/projects/{id}/reopen(id=${project.id})}" method="post" class="p-6">
+            <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+            <p class="text-sm text-slate-500 mb-4">Nhập ngày gia hạn mới (phải sau ngày hết hạn hiện tại) để mở lại dự án và trả trạng thái về "Đang chạy".</p>
+            <label class="block text-sm font-bold text-slate-700 mb-1">Ngày gia hạn mới</label>
+            <input type="date" name="extensionDate" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeModal('reopenModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Xác nhận mở lại</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openModal(id) {
+        const modal = document.getElementById(id);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    function closeModal(id) {
+        const modal = document.getElementById(id);
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    function toggleExtensionDateField() {
+        const select = document.getElementById('statusSelect');
+        const wrapper = document.getElementById('extensionDateWrapper');
+        const input = document.getElementById('extensionDateInput');
+        if (!select || !wrapper) return;
+        const show = select.value === 'EXTENDED';
+        wrapper.classList.toggle('hidden', !show);
+        if (input) input.required = show;
+    }
+    document.addEventListener('DOMContentLoaded', toggleExtensionDateField);
+
+    window.onclick = function(event) {
+        if (event.target.id && event.target.id.includes('Modal')) {
+            closeModal(event.target.id);
+        }
+    }
+</script>
+<script th:if="${canManageMembers}" th:inline="javascript">
+    window.ALL_USERS = [
+        /*[# th:each="u : ${allUsers}"]*/
+        {
+            id: /*[[${u.id}]]*/ 0,
+            username: /*[[${u.username}]]*/ '',
+            avatarUrl: /*[[${u.avatarUrl}]]*/ null,
+            department: /*[[${u.department != null ? u.department.name : ''}]]*/ '',
+            role: /*[[${u.role != null ? u.role.name : ''}]]*/ ''
+        },
+        /*[/]*/
+    ];
+</script>
+<script th:if="${canManageMembers}" src="/js/member-picker.js"></script>
+<script src="/js/notifications.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import com.aiagent.model.Department;
 import com.aiagent.model.Role;
 import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.repository.DocumentRepository;
+import com.aiagent.repository.ProjectRepository;
 import com.aiagent.repository.RoleRepository;
 import com.aiagent.repository.UserRepository;
 import com.aiagent.util.RoleConstants;
@@ -24,15 +25,17 @@ public class DataMigrationService {
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
+    private final ProjectRepository projectRepository;
 
     @Transactional
     public void migrate() {
-        // Must run BEFORE anything below reads a Document through JPA (native
-        // SQL, bypasses enum mapping) -- see DocumentRepository's backfill
-        // methods for why: a dev DB using ddl-auto=update can have existing
-        // rows with a blank status / a legacy PRIVATE access_level that would
-        // otherwise crash every subsequent Document query in this method.
+        // Must run BEFORE anything below reads a Document/Project through JPA
+        // (native SQL, bypasses enum mapping) -- see DocumentRepository's
+        // backfill methods for why: a dev DB using ddl-auto=update can have
+        // existing rows with a blank status / a legacy PRIVATE access_level
+        // that would otherwise crash every subsequent query in this method.
         backfillLegacyDocumentData();
+        backfillLegacyProjectData();
 
         Map<String, Role> roles = seedRoles();
         Map<String, Department> departments = seedDepartments();
@@ -50,6 +53,13 @@ public class DataMigrationService {
         if (privateToDepartment > 0 || statusFixed > 0) {
             log.info("[DATA-MIGRATION] Backfilled {} legacy PRIVATE document(s) to DEPARTMENT scope ({} department link(s) created), fixed {} document(s) with missing status -> APPROVED.",
                     privateToDepartment, linked, statusFixed);
+        }
+    }
+
+    private void backfillLegacyProjectData() {
+        int statusFixed = projectRepository.backfillBlankStatus();
+        if (statusFixed > 0) {
+            log.info("[DATA-MIGRATION] Backfilled {} project(s) with missing status -> RUNNING.", statusFixed);
         }
     }
 

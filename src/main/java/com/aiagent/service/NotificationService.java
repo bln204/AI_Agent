@@ -2,6 +2,7 @@ package com.aiagent.service;
 
 import com.aiagent.model.Document;
 import com.aiagent.model.Notification;
+import com.aiagent.model.Project;
 import com.aiagent.model.User;
 import com.aiagent.repository.NotificationRepository;
 import com.aiagent.repository.UserRepository;
@@ -70,6 +71,50 @@ public class NotificationService {
         Notification n = new Notification();
         n.setRecipient(doc.getUploadedBy());
         n.setDocumentId(doc.getId());
+        n.setMessage(message);
+        notificationRepository.save(n);
+    }
+
+    /**
+     * Fired from ProjectService.updateStatus khi Leader (không phải Director)
+     * đề xuất gia hạn dự án -- cùng transaction với việc lưu pendingExtensionDate,
+     * cùng mẫu notifyDirectorsOfPendingDocument.
+     */
+    @Transactional
+    public void notifyDirectorsOfPendingExtension(Project project) {
+        List<User> directors = userRepository.findByRole_Code(RoleConstants.ROLE_DIRECTOR);
+        if (directors.isEmpty()) {
+            log.warn("[NOTIFICATION] No DIRECTOR account found to notify about pending extension for project {}.", project.getId());
+            return;
+        }
+        String requesterName = project.getExtensionRequestedBy() != null ? project.getExtensionRequestedBy().getUsername() : "?";
+        String message = "Dự án \"" + project.getName() + "\" có yêu cầu gia hạn từ " + requesterName + " đang chờ bạn duyệt.";
+
+        for (User director : directors) {
+            Notification n = new Notification();
+            n.setRecipient(director);
+            n.setProjectId(project.getId());
+            n.setMessage(message);
+            notificationRepository.save(n);
+        }
+    }
+
+    /**
+     * Fired from ProjectService.approveExtension/rejectExtension so the Leader
+     * who requested the extension learns the outcome.
+     */
+    @Transactional
+    public void notifyLeaderOfExtensionDecision(Project project, User leader, boolean approved) {
+        if (leader == null) {
+            return;
+        }
+        String message = approved
+                ? "Yêu cầu gia hạn dự án \"" + project.getName() + "\" của bạn đã được Giám đốc duyệt."
+                : "Yêu cầu gia hạn dự án \"" + project.getName() + "\" của bạn đã bị Giám đốc từ chối.";
+
+        Notification n = new Notification();
+        n.setRecipient(leader);
+        n.setProjectId(project.getId());
         n.setMessage(message);
         notificationRepository.save(n);
     }

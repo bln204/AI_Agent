@@ -3,13 +3,9 @@ package com.aiagent.service;
 import com.aiagent.dto.AuthResponse;
 import com.aiagent.dto.GoogleLoginRequest;
 import com.aiagent.dto.LoginRequest;
-import com.aiagent.dto.RegisterRequest;
 import com.aiagent.model.User;
-import com.aiagent.repository.DepartmentRepository;
-import com.aiagent.repository.RoleRepository;
 import com.aiagent.repository.UserRepository;
 import com.aiagent.util.JwtTokenProvider;
-import com.aiagent.util.RoleConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -39,102 +35,12 @@ public class AuthService {
             .build();
 
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-    private final DepartmentRepository departmentRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
-
-    public AuthResponse register(RegisterRequest registerRequest) {
-        String passwordError = validatePasswordStrength(registerRequest.getPassword());
-        if (passwordError != null) {
-            return AuthResponse.builder()
-                    .success(false)
-                    .message(passwordError)
-                    .build();
-        }
-
-        // Check if user already exists
-        Optional<User> existingUser = userRepository.findByEmail(registerRequest.getEmail());
-        if (existingUser.isPresent()) {
-            return AuthResponse.builder()
-                    .success(false)
-                    .message("Email đã được sử dụng, vui lòng thử email khác.")
-                    .build();
-        }
-
-        // Check if username exists
-        Optional<User> existingUsername = userRepository.findByUsername(registerRequest.getUsername());
-        if (existingUsername.isPresent()) {
-            return AuthResponse.builder()
-                    .success(false)
-                    .message("Tên đăng nhập đã được sử dụng, vui lòng thử tên khác.")
-                    .build();
-        }
-
-        // Create new user
-        User newUser = new User();
-        newUser.setUsername(registerRequest.getUsername());
-        newUser.setEmail(registerRequest.getEmail());
-        newUser.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
-        
-        if (registerRequest.getDepartment() != null && !registerRequest.getDepartment().isEmpty()) {
-            departmentRepository.findByName(registerRequest.getDepartment())
-                    .ifPresent(newUser::setDepartment);
-        }
-        
-        roleRepository.findByCode(RoleConstants.ROLE_EMPLOYEE)
-                .ifPresent(newUser::setRole);
-        
-        newUser.setStatus("ACTIVE");
-        newUser.setCreatedAt(java.time.LocalDateTime.now());
-        newUser.setUpdatedAt(java.time.LocalDateTime.now());
-
-        userRepository.save(newUser);
-
-        return AuthResponse.builder()
-                .success(true)
-                .message("Đăng ký thành công! Vui lòng đăng nhập.")
-                .build();
-    }
-
-    private static final int PASSWORD_MIN_LENGTH = 8;
-
-    /**
-     * Kiểm tra tất cả các điều kiện mật khẩu mạnh (không dừng ở điều kiện đầu
-     * tiên bị sai) để trả về đúng những gì còn thiếu, giúp người dùng sửa một
-     * lần thay vì thử-sai nhiều lượt.
-     */
-    private String validatePasswordStrength(String password) {
-        if (password == null || password.isEmpty()) {
-            return "Mật khẩu không được để trống.";
-        }
-
-        java.util.List<String> missing = new java.util.ArrayList<>();
-        if (password.length() < PASSWORD_MIN_LENGTH) {
-            missing.add("tối thiểu " + PASSWORD_MIN_LENGTH + " ký tự");
-        }
-        if (!password.matches(".*[a-z].*")) {
-            missing.add("chữ thường (a-z)");
-        }
-        if (!password.matches(".*[A-Z].*")) {
-            missing.add("chữ hoa (A-Z)");
-        }
-        if (!password.matches(".*[0-9].*")) {
-            missing.add("chữ số (0-9)");
-        }
-        if (!password.matches(".*[^A-Za-z0-9].*")) {
-            missing.add("ký tự đặc biệt (!@#$%...)");
-        }
-
-        if (missing.isEmpty()) {
-            return null;
-        }
-        return "Mật khẩu chưa đủ mạnh. Cần có: " + String.join(", ", missing) + ".";
-    }
 
     private static final String INVALID_CREDENTIALS_MESSAGE = "Email hoặc mật khẩu không hợp lệ.";
 
