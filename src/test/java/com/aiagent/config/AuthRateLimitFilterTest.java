@@ -28,8 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * SEC-011 — verifies brute-force/spam throttling on the real login path
  * (/login/form, native Spring Security form login) and the JSON auth API
- * (/auth/login, /auth/register), while a normal, non-abusive login still
- * succeeds and Google login stays unthrottled.
+ * (/auth/login), while a normal, non-abusive login still succeeds and
+ * Google login stays unthrottled.
  */
 @WebMvcTest(AuthApiController.class)
 @Import({SecurityConfig.class, AuthRateLimitFilter.class, RateLimiterService.class})
@@ -130,25 +130,6 @@ class AuthRateLimitFilterTest {
                         .contentType("application/json")
                         .content("{\"email\":\"x@x.com\",\"password\":\"wrong\"}")
                         .with(fromIp("10.0.0.4")))
-                .andExpect(status().isTooManyRequests());
-    }
-
-    @Test
-    void apiRegister_spammedFromSameIp_eventuallyThrottled() throws Exception {
-        when(authService.register(any())).thenReturn(AuthResponse.builder().success(true).build());
-
-        for (int i = 0; i < 10; i++) {
-            mockMvc.perform(post("/auth/register")
-                            .contentType("application/json")
-                            .content("{\"username\":\"u" + i + "\",\"email\":\"u" + i + "@x.com\",\"password\":\"pw\"}")
-                            .with(fromIp("10.0.0.5")))
-                    .andExpect(status().isCreated());
-        }
-
-        mockMvc.perform(post("/auth/register")
-                        .contentType("application/json")
-                        .content("{\"username\":\"u-extra\",\"email\":\"u-extra@x.com\",\"password\":\"pw\"}")
-                        .with(fromIp("10.0.0.5")))
                 .andExpect(status().isTooManyRequests());
     }
 }

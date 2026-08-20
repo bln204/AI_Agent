@@ -72,7 +72,7 @@ public class SecurityConfig {
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(
-                    "/", "/login", "/register", "/favicon.ico",
+                    "/", "/login", "/favicon.ico",
                     "/css/**", "/js/**", "/images/**", "/static/**",
                     "/h2-console/**", "/auth/**"
                 ).permitAll()

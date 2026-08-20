@@ -66,15 +66,15 @@ class CsrfProtectionSecurityTest {
     }
 
     @Test
-    void authRegister_withoutCsrfToken_isNotBlockedByCsrfFilter() throws Exception {
+    void authLogin_withoutCsrfToken_isNotBlockedByCsrfFilter() throws Exception {
         // /auth/** stays CSRF-exempt (pre-session, nothing to protect yet).
         // A missing/invalid request body would fail validation elsewhere, but
         // the CSRF filter itself must never be the reason for a 403 here.
-        when(authService.register(any())).thenReturn(AuthResponse.builder().success(true).build());
+        when(authService.login(any())).thenReturn(AuthResponse.builder().success(true).build());
 
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/login")
                         .contentType("application/json")
-                        .content("{\"username\":\"u\",\"email\":\"u@x.com\",\"password\":\"pw\"}"))
-                .andExpect(status().isCreated());
+                        .content("{\"email\":\"u@x.com\",\"password\":\"pw\"}"))
+                .andExpect(status().isOk());
     }
 }

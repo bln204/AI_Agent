@@ -21,14 +21,14 @@ import java.io.IOException;
  * login — see login.html posting directly to it) and is keyed by IP+email
  * combined, so an attacker spamming one victim's email from their IP never
  * blocks that victim's own login from their own device (avoids a trivial
- * account-lockout DoS). /auth/login, /auth/google-login and /auth/register
- * are the JSON REST API and are throttled here by IP only as a coarse
- * flood guard (the body is JSON, not form params, so extracting an
- * identifier — e.g. email — here would require buffering/rewrapping the
- * request); AuthApiController additionally applies a finer IP+email check
- * for /auth/login once the body is already parsed. /auth/google-login now
- * calls out to Google's tokeninfo endpoint per attempt, so IP throttling
- * here also protects against hammering that outbound call.
+ * account-lockout DoS). /auth/login and /auth/google-login are the JSON
+ * REST API and are throttled here by IP only as a coarse flood guard (the
+ * body is JSON, not form params, so extracting an identifier — e.g. email
+ * — here would require buffering/rewrapping the request); AuthApiController
+ * additionally applies a finer IP+email check for /auth/login once the body
+ * is already parsed. /auth/google-login now calls out to Google's
+ * tokeninfo endpoint per attempt, so IP throttling here also protects
+ * against hammering that outbound call.
  */
 @Component
 @RequiredArgsConstructor
@@ -37,7 +37,6 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private static final String LOGIN_FORM_PATH = "/login/form";
     private static final String API_LOGIN_PATH = "/auth/login";
     private static final String API_GOOGLE_LOGIN_PATH = "/auth/google-login";
-    private static final String API_REGISTER_PATH = "/auth/register";
 
     private final RateLimiterService rateLimiterService;
 
@@ -99,16 +98,6 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             } else {
                 rateLimiterService.recordLoginFailure(ip);
             }
-            return;
-        }
-
-        if ("POST".equalsIgnoreCase(request.getMethod()) && API_REGISTER_PATH.equals(path)) {
-            if (rateLimiterService.isRegistrationBlocked(ip)) {
-                response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-                return;
-            }
-            rateLimiterService.recordRegistrationAttempt(ip);
-            filterChain.doFilter(request, response);
             return;
         }
 

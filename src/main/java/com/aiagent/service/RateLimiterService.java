@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * SEC-011 — in-memory brute-force / spam throttling for the authentication
- * endpoints (/login/form, /auth/login, /auth/register).
+ * endpoints (/login/form, /auth/login).
  *
  * In-memory only: counters are per-instance and are NOT shared across a
  * horizontally-scaled (multi-instance) deployment. The current
@@ -27,15 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RateLimiterService {
 
     private static final int MAX_LOGIN_FAILURES = 5;
-    private static final int MAX_REGISTRATIONS_PER_IP = 10;
 
     private final Cache<String, AtomicInteger> loginFailures = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(15))
-            .maximumSize(50_000)
-            .build();
-
-    private final Cache<String, AtomicInteger> registrationAttempts = Caffeine.newBuilder()
-            .expireAfterWrite(Duration.ofMinutes(60))
             .maximumSize(50_000)
             .build();
 
@@ -50,14 +44,5 @@ public class RateLimiterService {
 
     public void recordLoginSuccess(String key) {
         loginFailures.invalidate(key);
-    }
-
-    public boolean isRegistrationBlocked(String ip) {
-        AtomicInteger count = registrationAttempts.getIfPresent(ip);
-        return count != null && count.get() >= MAX_REGISTRATIONS_PER_IP;
-    }
-
-    public void recordRegistrationAttempt(String ip) {
-        registrationAttempts.get(ip, k -> new AtomicInteger(0)).incrementAndGet();
     }
 }

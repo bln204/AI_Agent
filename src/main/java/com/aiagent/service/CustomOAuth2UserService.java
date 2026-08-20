@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2UserAuthority;
@@ -88,11 +89,24 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         return "ROLE_" + roleCode.toUpperCase();
     }
 
-    private User createNewGoogleUser(String email, String googleId, String name, String picture) {
-        log.info("Tạo user mới từ Google: {}", email);
-
-        // Tìm pending record để lấy department & role
+    /**
+     * Google login KHÔNG còn là một đường tự-đăng-ký công khai: chỉ email đã
+     * được admin pre-provision (có GoogleUserPending record, chứa sẵn
+     * department/role) mới được phép tạo User mới ở lần đăng nhập Google đầu
+     * tiên. Email Google bất kỳ không có pending record bị từ chối thẳng —
+     * trước đây sẽ tự tạo User mới với role EMPLOYEE mặc định, tương đương
+     * self-registration ẩn, đi vòng qua việc xoá /register.
+     */
+    User createNewGoogleUser(String email, String googleId, String name, String picture) {
         Optional<GoogleUserPending> pending = pendingRepository.findByEmail(email);
+        if (pending.isEmpty()) {
+            log.warn("Từ chối tạo user Google mới (không có pending record được admin duyệt trước): {}", email);
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error("google_user_not_provisioned"),
+                    "Tài khoản Google này chưa được cấp quyền truy cập hệ thống.");
+        }
+
+        log.info("Tạo user mới từ Google (có pending record): {}", email);
 
         User newUser = new User();
         newUser.setEmail(email);
@@ -101,25 +115,18 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         newUser.setAvatarUrl(picture);
         newUser.setStatus("ACTIVE");
 
-        if (pending.isPresent()) {
-            GoogleUserPending p = pending.get();
-            if (p.getDepartment() != null) {
-                departmentRepository.findByName(p.getDepartment())
-                        .ifPresent(newUser::setDepartment);
-            }
-            if (p.getRole() != null) {
-                roleRepository.findByName(p.getRole())
-                        .ifPresent(newUser::setRole);
-            }
-            
-            log.info("Gán department={} role={} từ pending record",
-                    newUser.getDepartment(), newUser.getRole());
-        } else {
-            // Mặc định nếu không có pending
-            roleRepository.findByCode(RoleConstants.ROLE_EMPLOYEE)
-                    .ifPresent(newUser::setRole);
-            log.warn("Không tìm thấy pending record cho email: {} — gán mặc định", email);
+        GoogleUserPending p = pending.get();
+        if (p.getDepartment() != null) {
+            departmentRepository.findByName(p.getDepartment())
+                    .ifPresent(newUser::setDepartment);
         }
+        if (p.getRole() != null) {
+            roleRepository.findByName(p.getRole())
+                    .ifPresent(newUser::setRole);
+        }
+
+        log.info("Gán department={} role={} từ pending record",
+                newUser.getDepartment(), newUser.getRole());
 
         return userRepository.save(newUser);
     }
