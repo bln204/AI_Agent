@@ -203,6 +203,19 @@ public class DocumentAccessService {
     }
 
     /**
+     * Xoá một tài liệu PROJECT-scope ra khỏi dự án: cùng nhóm người được quản
+     * lý hồ sơ tài liệu dự án như canUploadToProject -- DIRECTOR (toàn hệ
+     * thống) hoặc leader của CHÍNH dự án đó (per-project, có thể là
+     * EMPLOYEE). Thành viên thường (kể cả MANAGER không phải leader) không
+     * được xoá tài liệu dự án dù có thể là người đã tải lên -- quyền này gắn
+     * với vai trò quản lý dự án, khác với DocumentService.deleteDocument
+     * (dùng ở trang /documents chung, xét quyền theo role/uploader).
+     */
+    public boolean canDeleteProjectDocument(User user, Project project) {
+        return isDirector(user) || isProjectLeader(user, project);
+    }
+
+    /**
      * Xem/tải NỘI DUNG FILE GỐC của tài liệu (vd. GET /api/documents/{id}/viewer)
      * -- khác với canAccessDocument, vốn chỉ xác định phạm vi truy cập
      * metadata/chat. Theo quyết định business (canViewDocumentDetail):

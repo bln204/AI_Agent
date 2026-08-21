@@ -136,9 +136,6 @@ public class ProjectService {
         Project project = getProjectOrThrow(id);
         requireDirectorOrLeader(project, actor, "chỉnh sửa");
         requireEditable(project, "chỉnh sửa");
-        if (isFrozen(project)) {
-            throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi chỉnh sửa.");
-        }
         project.setDescription(description);
         return projectRepository.save(project);
     }
@@ -227,6 +224,9 @@ public class ProjectService {
         if (isCompleted(project)) {
             throw new IllegalStateException("Dự án đã Hoàn thành và không thể " + action + ".");
         }
+        if (isFrozen(project)) {
+            throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi " + action + ".");
+        }
     }
 
     /**
@@ -242,9 +242,6 @@ public class ProjectService {
         boolean isDirector = requireDirectorOrLeader(project, actor, "chỉnh sửa trạng thái");
         requireEditable(project, "chỉnh sửa trạng thái");
 
-        if (isFrozen(project)) {
-            throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi chỉnh sửa.");
-        }
         if (newStatus == null || newStatus == ProjectStatus.RUNNING) {
             throw new IllegalArgumentException("Trạng thái không hợp lệ.");
         }

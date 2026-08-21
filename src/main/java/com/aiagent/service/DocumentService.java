@@ -736,10 +736,51 @@ public class DocumentService {
             throw new SecurityException("Bạn không có quyền xoá tài liệu này.");
         }
 
+        purgeDocument(doc);
+    }
+
+    /**
+     * Xoá tài liệu PROJECT-scope trong phạm vi MỘT dự án cụ thể -- khác với
+     * deleteDocument() (trang /documents chung, xét quyền theo role/uploader):
+     * quyền ở đây uỷ quyền hoàn toàn cho
+     * DocumentAccessService.canDeleteProjectDocument (Director toàn hệ thống
+     * hoặc leader của CHÍNH dự án đó, có thể là EMPLOYEE). Bắt buộc kiểm tra
+     * tài liệu thực sự thuộc projectId truyền vào -- chặn việc lợi dụng URL
+     * đổi projectId để xoá tài liệu ngoài phạm vi dự án mình quản lý. Dự án
+     * đã Hoàn thành hoặc đang Đóng băng thì không ai xoá được, kể cả Director
+     * (Director cần "Mở lại dự án" trước -- cùng rule với mọi thao tác chỉnh
+     * sửa dự án khác, xem ProjectService#requireEditable).
+     */
+    @Transactional
+    public void deleteProjectDocument(Long docId, Long projectId, User requester) {
+        Document doc = getDocument(docId);
+        boolean belongsToProject = doc.getProjects().stream()
+                .anyMatch(p -> p.getId().equals(projectId));
+        if (!belongsToProject) {
+            throw new IllegalArgumentException("Tài liệu không thuộc dự án này.");
+        }
+
+        com.aiagent.model.Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dự án."));
+
+        if (!documentAccessService.canDeleteProjectDocument(requester, project)) {
+            throw new SecurityException("Bạn không có quyền xoá tài liệu trong dự án này.");
+        }
+        if (project.getStatus() == ProjectStatus.COMPLETED) {
+            throw new IllegalStateException("Dự án đã Hoàn thành và không thể xoá tài liệu.");
+        }
+        if (project.isFrozen()) {
+            throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi xoá tài liệu.");
+        }
+
+        purgeDocument(doc);
+    }
+
+    private void purgeDocument(Document doc) {
         try {
-            documentIngestionService.deleteFromVectorStore(id);
+            documentIngestionService.deleteFromVectorStore(doc.getId());
         } catch (Exception e) {
-            log.error("Failed to remove document {} from vector store: {}", id, e.getMessage());
+            log.error("Failed to remove document {} from vector store: {}", doc.getId(), e.getMessage());
         }
 
         documentRepository.delete(doc);
@@ -748,7 +789,7 @@ public class DocumentService {
             try {
                 Files.deleteIfExists(Paths.get(doc.getFilePath()));
             } catch (IOException e) {
-                log.warn("Không thể xóa file vật lý cho tài liệu {}: {}", id, e.getMessage());
+                log.warn("Không thể xóa file vật lý cho tài liệu {}: {}", doc.getId(), e.getMessage());
             }
         }
     }
