@@ -11,6 +11,7 @@ import com.aiagent.service.DocumentAccessService;
 import com.aiagent.service.DocumentService;
 import com.aiagent.service.ProjectService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -28,6 +29,7 @@ import java.util.List;
 @Controller
 @RequestMapping("/projects")
 @RequiredArgsConstructor
+@Slf4j
 public class ProjectController {
 
     private final ProjectService projectService;
@@ -87,7 +89,7 @@ public class ProjectController {
 
             redirectAttributes.addFlashAttribute("success", "Tạo dự án thành công!");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "tạo dự án"));
         }
         return "redirect:/projects";
     }
@@ -148,7 +150,7 @@ public class ProjectController {
             projectService.updateDescription(id, description, user);
             redirectAttributes.addFlashAttribute("success", "Cập nhật mô tả thành công!");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "cập nhật mô tả dự án"));
         }
         return "redirect:/projects/" + id;
     }
@@ -166,7 +168,7 @@ public class ProjectController {
                     : "Cập nhật trạng thái thành công!";
             redirectAttributes.addFlashAttribute("success", message);
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "cập nhật trạng thái dự án"));
         }
         return "redirect:/projects/" + id;
     }
@@ -178,7 +180,7 @@ public class ProjectController {
             projectService.approveExtension(id, user);
             redirectAttributes.addFlashAttribute("success", "Đã duyệt yêu cầu gia hạn.");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "duyệt yêu cầu gia hạn"));
         }
         return "redirect:/projects/" + id;
     }
@@ -190,7 +192,7 @@ public class ProjectController {
             projectService.rejectExtension(id, user);
             redirectAttributes.addFlashAttribute("success", "Đã từ chối yêu cầu gia hạn.");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "từ chối yêu cầu gia hạn"));
         }
         return "redirect:/projects/" + id;
     }
@@ -204,7 +206,7 @@ public class ProjectController {
             projectService.reopenProject(id, extensionDate, user);
             redirectAttributes.addFlashAttribute("success", "Đã mở lại dự án.");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "mở lại dự án"));
         }
         return "redirect:/projects/" + id;
     }
@@ -232,7 +234,7 @@ public class ProjectController {
                     true, file, user);
             redirectAttributes.addFlashAttribute("success", "Đã tải tài liệu lên dự án!");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "tải tài liệu lên dự án"));
         }
         return "redirect:/projects/" + id;
     }
@@ -247,18 +249,22 @@ public class ProjectController {
             return "redirect:/projects/" + id;
         }
 
-        Project project = projectService.getProjectById(id).orElseThrow();
-        List<User> usersToAdd = userRepository.findAllById(memberIds);
-        for (User userToAdd : usersToAdd) {
-            projectService.addMember(project, userToAdd);
-        }
+        try {
+            Project project = projectService.getProjectById(id).orElseThrow();
+            List<User> usersToAdd = userRepository.findAllById(memberIds);
+            for (User userToAdd : usersToAdd) {
+                projectService.addMember(project, userToAdd);
+            }
 
-        if (leaderId != null) {
-            User newLeader = userRepository.findById(leaderId).orElseThrow();
-            projectService.setLeader(project, newLeader);
-        }
+            if (leaderId != null) {
+                User newLeader = userRepository.findById(leaderId).orElseThrow();
+                projectService.setLeader(project, newLeader);
+            }
 
-        redirectAttributes.addFlashAttribute("success", "Đã thêm " + usersToAdd.size() + " thành viên.");
+            redirectAttributes.addFlashAttribute("success", "Đã thêm " + usersToAdd.size() + " thành viên.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "thêm thành viên"));
+        }
         return "redirect:/projects/" + id;
     }
 
@@ -271,11 +277,15 @@ public class ProjectController {
             return "redirect:/projects/" + id;
         }
 
-        Project project = projectService.getProjectById(id).orElseThrow();
-        User userToRemove = userRepository.findById(userId).orElseThrow();
+        try {
+            Project project = projectService.getProjectById(id).orElseThrow();
+            User userToRemove = userRepository.findById(userId).orElseThrow();
 
-        projectService.removeMember(project, userToRemove);
-        redirectAttributes.addFlashAttribute("success", "Đã xoá thành viên: " + userToRemove.getUsername());
+            projectService.removeMember(project, userToRemove);
+            redirectAttributes.addFlashAttribute("success", "Đã xoá thành viên: " + userToRemove.getUsername());
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "xoá thành viên"));
+        }
         return "redirect:/projects/" + id;
     }
 
@@ -294,7 +304,7 @@ public class ProjectController {
             projectService.setLeader(project, newLeader);
             redirectAttributes.addFlashAttribute("success", "Đã đổi leader dự án: " + newLeader.getUsername());
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "đổi leader dự án"));
         }
         return "redirect:/projects/" + id;
     }
@@ -311,7 +321,7 @@ public class ProjectController {
             projectService.deleteProject(id);
             redirectAttributes.addFlashAttribute("success", "Xoá dự án thành công!");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Lỗi: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "xoá dự án"));
         }
         return "redirect:/projects";
     }
@@ -331,6 +341,26 @@ public class ProjectController {
                     AccessLevel.PROJECT, null, com.aiagent.model.DocumentClassification.OTHER,
                     project.getName(), null, true, file, uploader);
         }
+    }
+
+    /**
+     * IllegalArgumentException/IllegalStateException/SecurityException từ
+     * ProjectService/DocumentService là message tiếng Việt đã soạn sẵn cho
+     * đúng tình huống nghiệp vụ (validate, đóng băng, không có quyền...) --
+     * an toàn hiển thị thẳng cho user. Mọi exception khác (lỗi DB, bug,...)
+     * KHÔNG được lộ chi tiết kỹ thuật ra ngoài (WORKING_RULES #17/#18): log
+     * đầy đủ ở server để debug, chỉ trả về 1 câu thông báo chung, tự nhiên.
+     */
+    private String friendlyErrorMessage(Exception e, String action) {
+        if (e instanceof IllegalArgumentException || e instanceof IllegalStateException || e instanceof SecurityException) {
+            return e.getMessage();
+        }
+        if (e instanceof java.util.NoSuchElementException) {
+            log.warn("[PROJECT-ERROR] Không tìm thấy dữ liệu khi {}: {}", action, e.getMessage());
+            return "Không tìm thấy dự án hoặc người dùng liên quan.";
+        }
+        log.error("[PROJECT-ERROR] Lỗi khi {}: {}", action, e.getMessage(), e);
+        return "Không thể " + action + " do lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ quản trị viên.";
     }
 
     private User resolveUser(Authentication authentication) {
