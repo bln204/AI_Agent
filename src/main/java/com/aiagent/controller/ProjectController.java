@@ -115,6 +115,7 @@ public class ProjectController {
         boolean canViewDocDetail = documentAccessService.canViewDocumentDetail(user);
         boolean isDirector = documentAccessService.canManageProjects(user);
         boolean frozen = projectService.isFrozen(project);
+        boolean completed = projectService.isCompleted(project);
 
         List<Document> visibleDocuments = documentRepository.findByProjectId(id).stream()
                 .filter(doc -> documentAccessService.canAccessDocument(user, doc))
@@ -136,6 +137,7 @@ public class ProjectController {
         model.addAttribute("canViewDocDetail", canViewDocDetail);
         model.addAttribute("isDirector", isDirector);
         model.addAttribute("frozen", frozen);
+        model.addAttribute("completed", completed);
         model.addAttribute("effectiveDeadline", projectService.effectiveDeadline(project));
 
         return "project_view";
@@ -227,11 +229,15 @@ public class ProjectController {
             redirectAttributes.addFlashAttribute("error", "Bạn không có quyền tải tài liệu lên dự án này.");
             return "redirect:/projects/" + id;
         }
+        if (projectService.isFrozen(project)) {
+            redirectAttributes.addFlashAttribute("error", "Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi tải thêm tài liệu.");
+            return "redirect:/projects/" + id;
+        }
 
         try {
             documentService.uploadDocument(title, null, null, List.of(id), AccessLevel.PROJECT,
                     null, com.aiagent.model.DocumentClassification.OTHER, project.getName(), description,
-                    true, file, user);
+                    true, file, user, true);
             redirectAttributes.addFlashAttribute("success", "Đã tải tài liệu lên dự án!");
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "tải tài liệu lên dự án"));
@@ -339,7 +345,7 @@ public class ProjectController {
             if (file == null || file.isEmpty()) continue;
             documentService.uploadDocument(file.getOriginalFilename(), null, null, List.of(project.getId()),
                     AccessLevel.PROJECT, null, com.aiagent.model.DocumentClassification.OTHER,
-                    project.getName(), null, true, file, uploader);
+                    project.getName(), null, true, file, uploader, true);
         }
     }
 
@@ -352,7 +358,8 @@ public class ProjectController {
      * đầy đủ ở server để debug, chỉ trả về 1 câu thông báo chung, tự nhiên.
      */
     private String friendlyErrorMessage(Exception e, String action) {
-        if (e instanceof IllegalArgumentException || e instanceof IllegalStateException || e instanceof SecurityException) {
+        if (e instanceof IllegalArgumentException || e instanceof IllegalStateException || e instanceof SecurityException
+                || e instanceof com.aiagent.exception.DocumentDuplicateException) {
             return e.getMessage();
         }
         if (e instanceof java.util.NoSuchElementException) {

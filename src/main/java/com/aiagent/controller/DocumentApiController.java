@@ -117,6 +117,13 @@ public class DocumentApiController {
         if (!documentAccessService.canAccessDocument(user, doc)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
+        // canAccessDocument chỉ xác định phạm vi (department/project/public),
+        // KHÔNG đồng nghĩa được xem file gốc trực tiếp: Director/Manager hoặc
+        // leader của chính dự án đó mới được xem file gốc; thành viên dự án
+        // còn lại chỉ truy cập nội dung qua AI chat (xem canViewRawDocument).
+        if (!documentAccessService.canViewRawDocument(user, doc)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
 
         String viewerPath = doc.getViewerFilePath();
         if (viewerPath == null) {
