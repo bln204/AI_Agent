@@ -115,6 +115,7 @@ public class ProjectController {
         boolean canViewDocDetail = documentAccessService.canViewDocumentDetail(user);
         boolean isDirector = documentAccessService.canManageProjects(user);
         boolean frozen = projectService.isFrozen(project);
+        boolean completed = projectService.isCompleted(project);
 
         List<Document> visibleDocuments = documentRepository.findByProjectId(id).stream()
                 .filter(doc -> documentAccessService.canAccessDocument(user, doc))
@@ -136,6 +137,7 @@ public class ProjectController {
         model.addAttribute("canViewDocDetail", canViewDocDetail);
         model.addAttribute("isDirector", isDirector);
         model.addAttribute("frozen", frozen);
+        model.addAttribute("completed", completed);
         model.addAttribute("effectiveDeadline", projectService.effectiveDeadline(project));
 
         return "project_view";

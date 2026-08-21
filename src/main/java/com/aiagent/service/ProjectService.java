@@ -135,6 +135,7 @@ public class ProjectService {
     public Project updateDescription(Long id, String description, User actor) {
         Project project = getProjectOrThrow(id);
         requireDirectorOrLeader(project, actor, "chỉnh sửa");
+        requireEditable(project, "chỉnh sửa");
         if (isFrozen(project)) {
             throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi chỉnh sửa.");
         }
@@ -159,6 +160,7 @@ public class ProjectService {
 
     @Transactional
     public void addMember(Project project, User user) {
+        requireEditable(project, "quản lý thành viên");
         if (!projectMemberRepository.existsByProjectAndUser(project, user)) {
             ProjectMember member = new ProjectMember();
             member.setProject(project);
@@ -170,6 +172,7 @@ public class ProjectService {
 
     @Transactional
     public void removeMember(Project project, User user) {
+        requireEditable(project, "quản lý thành viên");
         projectMemberRepository.findByProjectAndUser(project, user)
                 .ifPresent(projectMemberRepository::delete);
     }
@@ -184,6 +187,7 @@ public class ProjectService {
      */
     @Transactional
     public void setLeader(Project project, User newLeader) {
+        requireEditable(project, "quản lý thành viên");
         ProjectMember target = projectMemberRepository.findByProjectAndUser(project, newLeader)
                 .orElseThrow(() -> new IllegalArgumentException("Người được chọn làm leader phải là thành viên của dự án"));
 
@@ -210,6 +214,22 @@ public class ProjectService {
     }
 
     /**
+     * COMPLETED là trạng thái TERMINAL, khác với "frozen" (tự động do hết
+     * hạn, Director vẫn mở lại được qua reopenProject) -- COMPLETED không có
+     * đường quay lại. Một khi đã Hoàn thành, requireEditable() chặn MỌI thay
+     * đổi khác trên dự án, kể cả với Director.
+     */
+    public boolean isCompleted(Project project) {
+        return project.getStatus() == ProjectStatus.COMPLETED;
+    }
+
+    private void requireEditable(Project project, String action) {
+        if (isCompleted(project)) {
+            throw new IllegalStateException("Dự án đã Hoàn thành và không thể " + action + ".");
+        }
+    }
+
+    /**
      * Dropdown chỉnh sửa chỉ nhận PAUSED/COMPLETED/EXTENDED -- RUNNING không
      * bao giờ set qua đường này (chỉ set tự động lúc tạo mới hoặc lúc
      * reopenProject). Khi chọn EXTENDED: Director tự duyệt ngay lập tức
@@ -220,6 +240,7 @@ public class ProjectService {
     public Project updateStatus(Long id, ProjectStatus newStatus, LocalDate extensionDateInput, User actor) {
         Project project = getProjectOrThrow(id);
         boolean isDirector = requireDirectorOrLeader(project, actor, "chỉnh sửa trạng thái");
+        requireEditable(project, "chỉnh sửa trạng thái");
 
         if (isFrozen(project)) {
             throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi chỉnh sửa.");

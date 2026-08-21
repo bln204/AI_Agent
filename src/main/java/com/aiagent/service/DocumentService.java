@@ -3,6 +3,7 @@ package com.aiagent.service;
 import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentStatus;
+import com.aiagent.model.ProjectStatus;
 import com.aiagent.model.User;
 import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.repository.DocumentRepository;
@@ -135,6 +136,24 @@ public class DocumentService {
                 .orElse(false));
     }
 
+    /**
+     * COMPLETED là trạng thái terminal của dự án (xem ProjectService#isCompleted):
+     * một khi đã Hoàn thành, KHÔNG AI -- kể cả Director hay chính leader vừa
+     * pass check quyền ở isAuthorizedForProjectUpload -- được upload thêm tài
+     * liệu vào đó. Đây là true security boundary cho việc upload (áp dụng cho
+     * MỌI entry point dẫn tới đây: /documents/upload, /api/documents/upload,
+     * /projects/{id}/documents/upload), không chỉ riêng ProjectController.
+     */
+    private void assertProjectsNotCompleted(List<Long> projectIds) {
+        for (Long pid : projectIds) {
+            projectRepository.findById(pid).ifPresent(p -> {
+                if (p.getStatus() == ProjectStatus.COMPLETED) {
+                    throw new IllegalStateException("Dự án đã Hoàn thành và không thể tải thêm tài liệu.");
+                }
+            });
+        }
+    }
+
     public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
                                  java.util.List<Long> projectIds, AccessLevel accessLevel,
                                  String decision, com.aiagent.model.DocumentClassification classification,
@@ -181,6 +200,9 @@ public class DocumentService {
         }
         if (AccessLevel.PROJECT.equals(accessLevel) && (projectIds == null || projectIds.isEmpty())) {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một dự án cho mức truy cập PROJECT.");
+        }
+        if (AccessLevel.PROJECT.equals(accessLevel)) {
+            assertProjectsNotCompleted(projectIds);
         }
 
         // --- Duplicate detection gate (Level 1/2/3). Runs entirely BEFORE any

@@ -4,6 +4,7 @@ import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentClassification;
 import com.aiagent.model.Project;
+import com.aiagent.model.ProjectStatus;
 import com.aiagent.model.Role;
 import com.aiagent.model.User;
 import com.aiagent.rag.DocumentIngestionService;
@@ -152,6 +153,16 @@ class DocumentServiceProjectUploadAuthorizationTest {
         when(documentAccessService.canUploadToProject(employee, project)).thenReturn(false);
 
         assertThrows(SecurityException.class, () -> uploadToProject(employee));
+    }
+
+    @Test
+    void completedProject_isDenied_evenForDirector() {
+        project.setStatus(ProjectStatus.COMPLETED);
+        User director = user(RoleConstants.ROLE_DIRECTOR);
+        when(documentAccessService.canUploadToProject(director, project)).thenReturn(true);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> uploadToProject(director));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("Hoàn thành"));
     }
 
     @Test

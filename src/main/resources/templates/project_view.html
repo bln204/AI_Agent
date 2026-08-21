@@ -39,6 +39,13 @@
                 </button>
             </div>
 
+            <!-- Completed banner -->
+            <div th:if="${completed}" class="mb-6 p-5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3">
+                <div>
+                    <div class="font-bold text-emerald-800">Dự án đã Hoàn thành</div>
+                </div>
+            </div>
+
             <!-- Pending extension banner -->
             <div th:if="${project.pendingExtensionDate != null}" class="mb-6 p-5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-4 flex-wrap">
                 <div class="flex items-center gap-3">
@@ -110,16 +117,16 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-xs font-bold text-slate-400 uppercase">Mô tả</div>
-                        <button th:if="${canUpdate and !frozen}" type="button" onclick="openModal('descModal')" class="text-xs font-bold text-indigo-600 hover:text-indigo-700">Sửa mô tả</button>
+                        <button th:if="${canUpdate and !frozen and !completed}" type="button" onclick="openModal('descModal')" class="text-xs font-bold text-indigo-600 hover:text-indigo-700">Sửa mô tả</button>
                     </div>
                     <p class="text-slate-700 leading-relaxed" th:text="${project.description ?: 'Chưa có mô tả chi tiết cho dự án này.'}"></p>
                 </div>
             </div>
 
             <!-- Status update -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-6" th:if="${canUpdate and !frozen}">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-6" th:if="${canUpdate and !frozen and !completed}">
                 <h3 class="text-lg font-bold text-slate-900 mb-4">Cập nhật trạng thái</h3>
-                <form th:action="@{/projects/{id}/status(id=${project.id})}" method="post" class="flex flex-col gap-4" id="statusForm">
+                <form th:action="@{/projects/{id}/status(id=${project.id})}" method="post" class="flex flex-col gap-4" id="statusForm" onsubmit="return confirmCompleteStatus()">
                     <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
                     <div class="flex gap-3 flex-wrap items-end">
                         <div class="flex-1 min-w-[200px]">
@@ -149,7 +156,7 @@
 
             <!-- Members -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canManageMembers}">
+                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canManageMembers and !completed}">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Thêm thành viên mới</h3>
                     <form th:action="@{/projects/{id}/members/add(id=${project.id})}" method="post">
                         <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
@@ -186,7 +193,7 @@
                                     <div class="text-xs text-slate-400 font-medium" th:text="${member.user.email}">Email</div>
                                 </div>
                             </div>
-                            <div th:if="${canManageMembers}" class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div th:if="${canManageMembers and !completed}" class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <form th:if="${!member.leader}" th:action="@{/projects/{id}/members/set-leader(id=${project.id})}" method="post" class="m-0">
                                     <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
                                     <input type="hidden" name="userId" th:value="${member.user.id}">
@@ -205,7 +212,7 @@
 
             <!-- Documents -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canUploadDocs and !frozen}">
+                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canUploadDocs and !frozen and !completed}">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Tải lên hồ sơ tài liệu</h3>
                     <form th:action="@{/projects/{id}/documents/upload(id=${project.id})}" method="post" enctype="multipart/form-data" class="flex flex-col md:flex-row gap-3">
                         <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
@@ -300,6 +307,16 @@
         const modal = document.getElementById(id);
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+    }
+    // Chuyển sang "Hoàn thành" là thao tác không thể hoàn tác (terminal --
+    // backend chặn mọi chỉnh sửa sau đó, kể cả với Director), nên bắt xác
+    // nhận trước khi submit, giống các thao tác phá huỷ khác trong trang này.
+    function confirmCompleteStatus() {
+        const select = document.getElementById('statusSelect');
+        if (select && select.value === 'COMPLETED') {
+            return confirm('Bạn có chắc chắn muốn chuyển dự án này sang trạng thái "Hoàn thành"?');
+        }
+        return true;
     }
     function toggleExtensionDateField() {
         const select = document.getElementById('statusSelect');

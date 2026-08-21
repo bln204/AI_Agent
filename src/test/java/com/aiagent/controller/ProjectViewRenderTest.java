@@ -104,6 +104,10 @@ class ProjectViewRenderTest {
         when(projectService.getAllProjects()).thenReturn(List.of(project));
         when(projectService.getProjectById(9L)).thenReturn(Optional.of(project));
         when(projectService.isFrozen(project)).thenReturn(false);
+        when(projectService.isCompleted(any())).thenAnswer(inv -> {
+            Project p = inv.getArgument(0);
+            return p.getStatus() == ProjectStatus.COMPLETED;
+        });
         when(projectService.effectiveDeadline(project)).thenReturn(project.getExpectedEndDate());
         ProjectMember member = new ProjectMember();
         member.setProject(project);
@@ -154,6 +158,33 @@ class ProjectViewRenderTest {
                         org.hamcrest.Matchers.containsString("id=\"reopenExtensionDateNative\""),
                         org.hamcrest.Matchers.containsString("/js/date-mask.js"),
                         // server-rendered readonly dates must stay dd/MM/yyyy (unaffected by this change)
-                        org.hamcrest.Matchers.containsString("15/01/2026"))));
+                        org.hamcrest.Matchers.containsString("15/01/2026"),
+                        // status-change must ask for confirmation client-side (server is the
+                        // real boundary regardless, but this is the UX ask)
+                        org.hamcrest.Matchers.containsString("onsubmit=\"return confirmCompleteStatus()\""))));
+    }
+
+    @Test
+    @WithMockUser(username = "director@company.com")
+    void projectDetail_completedProject_locksEditingUi() throws Exception {
+        Project project = project();
+        project.setStatus(ProjectStatus.COMPLETED);
+        stubCommon(director(), project);
+
+        String body = mockMvc.perform(get("/projects/9"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.hamcrest.MatcherAssert.assertThat("completed banner must be shown",
+                body, org.hamcrest.Matchers.containsString("Dự án đã Hoàn thành"));
+        org.hamcrest.MatcherAssert.assertThat("status-update form must be hidden once completed (terminal state)",
+                body, org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("id=\"statusForm\"")));
+        org.hamcrest.MatcherAssert.assertThat("'Sửa mô tả' button must be hidden once completed " +
+                "(the #descModal itself always renders in markup, only its trigger button is gated)",
+                body, org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("openModal('descModal')")));
+        org.hamcrest.MatcherAssert.assertThat("upload-document form must be hidden once completed",
+                body, org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Tải lên hồ sơ tài liệu")));
+        org.hamcrest.MatcherAssert.assertThat("add-member form must be hidden once completed",
+                body, org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Thêm thành viên mới")));
     }
 }
