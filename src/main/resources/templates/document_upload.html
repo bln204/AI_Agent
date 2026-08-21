@@ -46,31 +46,49 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="accessLevel">Quyền truy cập</label>
-                        <select id="accessLevel" name="accessLevel" class="form-control">
-                            <option th:each="level : ${accessLevels}"
-                                    th:value="${level}"
-                                    th:text="${level == T(com.aiagent.model.AccessLevel).PUBLIC ? ' Công khai toàn công ty' :
-                                             (level == T(com.aiagent.model.AccessLevel).DEPARTMENT ? ' Nội bộ phòng ban' :
-                                             ' Theo dự án')}">
-                            </option>
-                        </select>
+                        <label for="accessLevelTrigger">Quyền truy cập</label>
+                        <div class="ss-select">
+                            <div class="relative">
+                                <button type="button" id="accessLevelTrigger" class="ss-trigger w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium text-slate-700">
+                                    <span class="ss-trigger-label truncate"></span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 flex-shrink-0"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div class="ss-panel hidden absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto"></div>
+                            </div>
+                            <select id="accessLevel" name="accessLevel" class="ss-native hidden">
+                                <option th:each="level : ${accessLevels}"
+                                        th:value="${level}"
+                                        th:text="${level == T(com.aiagent.model.AccessLevel).PUBLIC ? ' Công khai toàn công ty' :
+                                                 (level == T(com.aiagent.model.AccessLevel).DEPARTMENT ? ' Nội bộ phòng ban' :
+                                                 ' Theo dự án')}">
+                                </option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="classification">Loại tài liệu</label>
-                        <select id="classification" name="classification" class="form-control">
-                            <option th:each="type : ${classifications}"
-                                    th:value="${type}"
-                                    th:selected="${type == T(com.aiagent.model.DocumentClassification).OTHER}"
-                                    th:text="${type == T(com.aiagent.model.DocumentClassification).INTERNAL_POLICY ? ' Chính sách nội bộ' :
-                                             (type == T(com.aiagent.model.DocumentClassification).PROJECT_DOCUMENT ? ' Tài liệu dự án' :
-                                             (type == T(com.aiagent.model.DocumentClassification).DECISION_DOCUMENT ? ' Quyết định' :
-                                             (type == T(com.aiagent.model.DocumentClassification).REPORT ? ' Báo cáo' :
-                                             (type == T(com.aiagent.model.DocumentClassification).TECHNICAL_DOCUMENT ? ' Tài liệu kỹ thuật' :
-                                             (type == T(com.aiagent.model.DocumentClassification).REQUEST_FORM ? ' Đơn từ' : ' Khác')))))}">
-                            </option>
-                        </select>
+                        <label for="classificationTrigger">Loại tài liệu</label>
+                        <div class="ss-select">
+                            <div class="relative">
+                                <button type="button" id="classificationTrigger" class="ss-trigger w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium text-slate-700">
+                                    <span class="ss-trigger-label truncate"></span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 flex-shrink-0"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div class="ss-panel hidden absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto"></div>
+                            </div>
+                            <select id="classification" name="classification" class="ss-native hidden">
+                                <option th:each="type : ${classifications}"
+                                        th:value="${type}"
+                                        th:selected="${type == T(com.aiagent.model.DocumentClassification).OTHER}"
+                                        th:text="${type == T(com.aiagent.model.DocumentClassification).INTERNAL_POLICY ? ' Chính sách nội bộ' :
+                                                 (type == T(com.aiagent.model.DocumentClassification).PROJECT_DOCUMENT ? ' Tài liệu dự án' :
+                                                 (type == T(com.aiagent.model.DocumentClassification).DECISION_DOCUMENT ? ' Quyết định' :
+                                                 (type == T(com.aiagent.model.DocumentClassification).REPORT ? ' Báo cáo' :
+                                                 (type == T(com.aiagent.model.DocumentClassification).TECHNICAL_DOCUMENT ? ' Tài liệu kỹ thuật' :
+                                                 (type == T(com.aiagent.model.DocumentClassification).REQUEST_FORM ? ' Đơn từ' : ' Khác')))))}">
+                                </option>
+                            </select>
+                        </div>
                         <p class="manager-note">Dùng để lọc trong "Công Văn Hội Sở" — chọn "Đơn từ" cho đơn xin nghỉ phép, chuyển công tác, v.v.</p>
                     </div>
                 </div>
@@ -117,14 +135,16 @@
                     </div>
                     <p class="manager-note" th:if="${currentUser.role.code == 'DIRECTOR'}">Chỉ chọn 1 dự án để tải tài liệu lên.</p>
 
-                    <select id="projectIds" name="projectIds" class="form-control" multiple
-                            th:if="${currentUser.role.code != 'DIRECTOR'}">
-                        <option th:each="proj : ${projects}"
-                                th:value="${proj.id}"
-                                th:text="${proj.name}">
-                        </option>
-                    </select>
-                    <p class="manager-note" th:if="${currentUser.role.code != 'DIRECTOR'}">Giữ Ctrl (Cmd) để chọn nhiều dự án.</p>
+                    <div class="item-picker" data-field="projectIds" data-items-var="PROJECT_OPTIONS"
+                         th:if="${currentUser.role.code != 'DIRECTOR'}">
+                        <div class="relative">
+                            <input type="text" class="ip-input w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm font-medium" placeholder="Tìm dự án theo tên..." autocomplete="off">
+                            <div class="ip-suggestions hidden absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto"></div>
+                        </div>
+                        <div class="ip-selected mt-3 flex flex-wrap gap-2"></div>
+                        <div class="ip-hidden-inputs"></div>
+                    </div>
+                    <p class="manager-note" th:if="${currentUser.role.code != 'DIRECTOR'}">Chọn 1 hoặc nhiều dự án để tải tài liệu lên.</p>
                 </div>
 
                 <div class="form-group">
@@ -174,6 +194,15 @@
     </main>
 </div>
 
+<script th:if="${currentUser.role.code != 'DIRECTOR'}" th:inline="javascript">
+    window.PROJECT_OPTIONS = [
+        /*[# th:each="p : ${projects}"]*/
+        { id: /*[[${p.id}]]*/ 0, label: /*[[${p.name}]]*/ '' },
+        /*[/]*/
+    ];
+</script>
+<script th:src="@{/js/styled-select.js}"></script>
+<script th:if="${currentUser.role.code != 'DIRECTOR'}" th:src="@{/js/item-picker.js}"></script>
 <script th:src="@{/js/document-upload.js}"></script>
 </body>
 </html>
