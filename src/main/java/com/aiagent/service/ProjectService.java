@@ -55,6 +55,9 @@ public class ProjectService {
         if (startDate == null || expectedEndDate == null) {
             throw new IllegalArgumentException("Vui lòng nhập ngày bắt đầu và ngày dự kiến kết thúc");
         }
+        if (startDate.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Ngày bắt đầu phải lớn hơn hoặc bằng ngày hiện tại");
+        }
         if (!expectedEndDate.isAfter(startDate)) {
             throw new IllegalArgumentException("Ngày dự kiến kết thúc phải sau ngày bắt đầu");
         }
@@ -195,19 +198,15 @@ public class ProjectService {
         projectMemberRepository.save(target);
     }
 
+    // effectiveDeadline/isFrozen giờ sống ở Project entity (@Transient) để
+    // Thymeleaf dùng chung được 1 nguồn logic duy nhất -- các method dưới đây
+    // giữ lại chỉ để không phải sửa mọi call site hiện có trong service này.
     public LocalDate effectiveDeadline(Project project) {
-        return project.getExtensionDate() != null ? project.getExtensionDate() : project.getExpectedEndDate();
+        return project.getEffectiveDeadline();
     }
 
-    /**
-     * Dự án cũ chưa có expectedEndDate (tạo trước tính năng này) không bao
-     * giờ coi là đóng băng. Dự án đã COMPLETED cũng không đóng băng -- khái
-     * niệm đóng băng chỉ áp dụng cho dự án còn đang trong vòng đời hoạt động.
-     */
     public boolean isFrozen(Project project) {
-        LocalDate deadline = effectiveDeadline(project);
-        if (deadline == null || project.getStatus() == ProjectStatus.COMPLETED) return false;
-        return LocalDate.now().isAfter(deadline);
+        return project.isFrozen();
     }
 
     /**

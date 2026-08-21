@@ -38,11 +38,13 @@
                     <div class="flex justify-between items-start mb-4">
                         <h3 class="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors" th:text="${proj.name}">Tên dự án</h3>
                         <span th:class="|px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    proj.frozen ? 'bg-slate-800 text-white' :
                                     proj.status.name() == 'RUNNING' ? 'bg-emerald-100 text-emerald-700' :
                                     proj.status.name() == 'PAUSED' ? 'bg-amber-100 text-amber-700' :
                                     proj.status.name() == 'COMPLETED' ? 'bg-slate-200 text-slate-600' :
                                     'bg-indigo-100 text-indigo-700'}|"
                               th:text="${
+                                    proj.frozen ? 'Đóng băng' :
                                     proj.status.name() == 'RUNNING' ? 'Đang chạy' :
                                     proj.status.name() == 'PAUSED' ? 'Tạm dừng' :
                                     proj.status.name() == 'COMPLETED' ? 'Hoàn thành' :
@@ -100,11 +102,25 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-slate-700 mb-1">Ngày bắt đầu</label>
-                        <input type="date" name="startDate" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                        <div class="relative">
+                            <input type="text" id="startDateDisplay" placeholder="dd/mm/yyyy" maxlength="10" inputmode="numeric" autocomplete="off" class="w-full pl-4 pr-10 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                            <button type="button" tabindex="-1" onclick="openDatePicker('startDateNative')" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            </button>
+                            <input type="date" id="startDateNative" class="sr-only" tabindex="-1" aria-hidden="true">
+                        </div>
+                        <input type="hidden" name="startDate" id="startDateIso">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-slate-700 mb-1">Ngày dự kiến kết thúc</label>
-                        <input type="date" name="expectedEndDate" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                        <div class="relative">
+                            <input type="text" id="expectedEndDateDisplay" placeholder="dd/mm/yyyy" maxlength="10" inputmode="numeric" autocomplete="off" class="w-full pl-4 pr-10 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                            <button type="button" tabindex="-1" onclick="openDatePicker('expectedEndDateNative')" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            </button>
+                            <input type="date" id="expectedEndDateNative" class="sr-only" tabindex="-1" aria-hidden="true">
+                        </div>
+                        <input type="hidden" name="expectedEndDate" id="expectedEndDateIso">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
@@ -162,6 +178,37 @@
             closeModal(event.target.id);
         }
     }
+</script>
+<script src="/js/date-mask.js"></script>
+<script th:if="${canManage}">
+    (function () {
+        var startDisplay = document.getElementById('startDateDisplay');
+        var startIso = document.getElementById('startDateIso');
+        var startNative = document.getElementById('startDateNative');
+        var endDisplay = document.getElementById('expectedEndDateDisplay');
+        var endIso = document.getElementById('expectedEndDateIso');
+        var endNative = document.getElementById('expectedEndDateNative');
+
+        var endConstraint = {
+            min: function () { return startIso.value; },
+            strictlyAfter: true,
+            message: 'Ngày dự kiến kết thúc phải sau ngày bắt đầu'
+        };
+
+        initDateMask(startDisplay, startIso, startNative, {
+            min: todayIso(),
+            strictlyAfter: false,
+            message: 'Ngày bắt đầu phải lớn hơn hoặc bằng ngày hiện tại'
+        });
+        initDateMask(endDisplay, endIso, endNative, endConstraint);
+
+        // "Ngày dự kiến kết thúc" phải > "Ngày bắt đầu" hiện tại -- re-check
+        // mỗi khi start date đổi (gõ tay hoặc chọn từ lịch).
+        ['input', 'blur'].forEach(function (evt) {
+            startDisplay.addEventListener(evt, function () { refreshDateConstraint(endDisplay, endNative, endConstraint); });
+        });
+        startNative.addEventListener('change', function () { refreshDateConstraint(endDisplay, endNative, endConstraint); });
+    })();
 </script>
 <script th:if="${canManage}" th:inline="javascript">
     window.ALL_USERS = [

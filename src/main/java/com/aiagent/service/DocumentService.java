@@ -116,35 +116,63 @@ public class DocumentService {
     private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
     /**
-     * Ngoại lệ hẹp, có chủ đích (business decision, xem DocumentAccessService.
-     * canUploadToProject): một EMPLOYEE làm leader của 1 dự án cụ thể được
-     * phép upload tài liệu CHỈ khi accessLevel=PROJECT và MỌI project trong
-     * projectIds đều do chính họ làm leader -- không được lợi dụng ô chọn
-     * nhiều dự án ở trang /documents chung để gắn vào dự án họ không lãnh đạo.
-     * Rule "Nhân viên không được upload tài liệu" (canUpload) không đổi cho
-     * mọi trường hợp khác.
+     * Gate riêng cho upload tài liệu PROJECT-scope: uỷ quyền hoàn toàn cho
+     * DocumentAccessService.canUploadToProject (DIRECTOR toàn hệ thống HOẶC
+     * leader của CHÍNH dự án đó, có thể là EMPLOYEE) cho MỌI project trong
+     * projectIds -- không được lợi dụng ô chọn nhiều dự án ở trang /documents
+     * chung để gắn vào dự án mình không lãnh đạo. canUpload() (Director/
+     * Manager) KHÔNG được dùng làm lối tắt ở đây: một MANAGER chỉ là thành
+     * viên thường (không phải leader) của dự án không còn upload được vào dự
+     * án đó -- business quyết định, xem canUploadToProject. canUpload() vẫn
+     * giữ nguyên cho mọi accessLevel khác (DEPARTMENT/PUBLIC).
      */
-    private boolean isProjectLeaderUploadException(User uploader, AccessLevel accessLevel, List<Long> projectIds) {
-        if (!AccessLevel.PROJECT.equals(accessLevel) || projectIds == null || projectIds.isEmpty()) {
+    private boolean isAuthorizedForProjectUpload(User uploader, List<Long> projectIds) {
+        if (projectIds == null || projectIds.isEmpty()) {
             return false;
         }
         return projectIds.stream().allMatch(pid -> projectRepository.findById(pid)
-                .map(p -> documentAccessService.isProjectLeader(uploader, p))
+                .map(p -> documentAccessService.canUploadToProject(uploader, p))
                 .orElse(false));
     }
 
-    @Transactional
     public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
                                  java.util.List<Long> projectIds, AccessLevel accessLevel,
                                  String decision, com.aiagent.model.DocumentClassification classification,
                                  String projectName, String description, boolean internalSourceFlag,
                                  MultipartFile file, User uploader) throws java.io.IOException {
+        return uploadDocument(title, content, departmentIds, projectIds, accessLevel, decision, classification,
+                projectName, description, internalSourceFlag, file, uploader, false);
+    }
+
+    /**
+     * selfApprove: dùng RIÊNG cho các endpoint đã tự gác quyền chặt hơn
+     * canUpload() (vd. ProjectController -- chỉ Director hoặc Leader của
+     * đúng dự án đó mới gọi tới được), để tài liệu hiển thị/chat được ngay
+     * cho cả nhóm dự án thay vì rơi vào hàng chờ Giám đốc duyệt. KHÔNG được
+     * set true cho luồng upload chung ở /documents -- nơi đó vẫn phải giữ
+     * đúng rule cũ (Trưởng phòng upload phải qua Giám đốc duyệt), nếu không
+     * một Trưởng phòng bất kỳ có thể tự duyệt tài liệu của mình bằng cách gắn
+     * accessLevel=PROJECT ở trang chung.
+     */
+    @Transactional
+    public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
+                                 java.util.List<Long> projectIds, AccessLevel accessLevel,
+                                 String decision, com.aiagent.model.DocumentClassification classification,
+                                 String projectName, String description, boolean internalSourceFlag,
+                                 MultipartFile file, User uploader, boolean selfApprove) throws java.io.IOException {
 
         if (uploader == null || uploader.getRole() == null) {
             throw new SecurityException("Không có quyền tải lên tài liệu.");
         }
 
-        if (!documentAccessService.canUpload(uploader) && !isProjectLeaderUploadException(uploader, accessLevel, projectIds)) {
+        // PROJECT-scope upload dùng gate riêng (Director hoặc leader của
+        // CHÍNH dự án đó) thay vì canUpload() -- xem isAuthorizedForProjectUpload.
+        // Mọi accessLevel khác (DEPARTMENT/PUBLIC) giữ nguyên canUpload() cũ
+        // (Director/Manager).
+        boolean authorized = AccessLevel.PROJECT.equals(accessLevel)
+                ? isAuthorizedForProjectUpload(uploader, projectIds)
+                : documentAccessService.canUpload(uploader);
+        if (!authorized) {
             throw new SecurityException("Bạn không có quyền tải lên tài liệu.");
         }
 
@@ -209,8 +237,10 @@ public class DocumentService {
         // immediately as before; MANAGER uploads require DIRECTOR approval
         // first (business requirement) and must NOT be ingested into Qdrant
         // until approved -- see the `hasFile` ingestion block below, gated on
-        // this same status.
-        doc.setStatus(RoleConstants.isHighLevel(uploader.getRole().getCode())
+        // this same status. selfApprove (project-leader path only, see javadoc
+        // on the public overload above) grants the same immediate-APPROVED
+        // treatment without touching the role-based rule for every other path.
+        doc.setStatus((RoleConstants.isHighLevel(uploader.getRole().getCode()) || selfApprove)
                 ? DocumentStatus.APPROVED
                 : DocumentStatus.PENDING_APPROVAL);
         doc.setClassification(classification != null ? classification : com.aiagent.model.DocumentClassification.OTHER);

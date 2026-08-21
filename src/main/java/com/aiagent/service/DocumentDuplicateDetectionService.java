@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,11 +29,12 @@ import java.util.Optional;
  * ingestion.
  *
  * Disclosure rule (WORKING_RULES §17 / §4): the upload is always rejected on
- * a match, but the existing document's id/title are only included in the
- * thrown exception when the uploader can actually access that document
- * (DocumentAccessService#canAccessDocument). Otherwise a generic message is
- * used — the caller learns "this content already exists" but not which
- * project/department/private document it belongs to.
+ * a match, but the existing document's id/title/location (department or
+ * project name, uploader, upload date) are only included in the thrown
+ * exception when the uploader can actually access that document
+ * (DocumentAccessService#canAccessDocument). Otherwise a fully generic
+ * message is used — the caller learns "this content already exists" but not
+ * which department/project document it belongs to.
  */
 @Service
 @Slf4j
@@ -40,6 +42,7 @@ import java.util.Optional;
 public class DocumentDuplicateDetectionService {
 
     private static final String GENERIC_MESSAGE = "Tài liệu này đã tồn tại trên hệ thống và không thể tải lên.";
+    private static final DateTimeFormatter UPLOAD_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final DocumentRepository documentRepository;
     private final DocumentAccessService documentAccessService;
@@ -96,8 +99,8 @@ public class DocumentDuplicateDetectionService {
         if (!duplicateDetectionEnabled || chunks == null || chunks.isEmpty()) {
             return;
         }
-        Optional<SemanticDuplicateDetectionService.SemanticMatch> match =
-                semanticDuplicateDetectionService.findDuplicate(chunks, uploader);
+        Optional<SemanticDuplicateDetectionService.SemanticMatch> match = semanticDuplicateDetectionService
+                .findDuplicate(chunks, uploader);
         if (match.isPresent()) {
             throw buildException(DocumentDuplicateType.DUPLICATE_SEMANTIC, match.get().document(), uploader);
         }
@@ -107,11 +110,34 @@ public class DocumentDuplicateDetectionService {
         boolean canSeeExisting = documentAccessService.canAccessDocument(uploader, existing);
         Long id = canSeeExisting ? existing.getId() : null;
         String name = canSeeExisting ? existing.getTitle() : null;
+        String message = canSeeExisting ? buildLocatedMessage(existing) : GENERIC_MESSAGE;
 
         log.info("[DUPLICATE-DETECTED] type={}, existingDocId={}, requesterCanAccess={}",
                 type, existing.getId(), canSeeExisting);
 
-        return new DocumentDuplicateException(type, id, name, GENERIC_MESSAGE);
+        return new DocumentDuplicateException(type, id, name, message);
+    }
+
+    /**
+     * Chỉ được gọi khi uploader đã canAccessDocument(existing) == true --
+     * KHÔNG được lộ phòng ban/dự án của một tài liệu mà uploader không có
+     * quyền xem, kể cả khi nội dung trùng khớp (WORKING_RULES §4/§7: tránh
+     * leak scope/sự tồn tại của tài liệu ngoài phạm vi qua thông báo lỗi).
+     */
+    private String buildLocatedMessage(Document existing) {
+        String location = switch (existing.getAccessLevel()) {
+            case PUBLIC -> "tài liệu công khai (PUBLIC)";
+            case DEPARTMENT -> "phòng ban " +
+                    (existing.getDepartmentName() != null ? existing.getDepartmentName() : "không xác định");
+            case PROJECT -> "dự án " +
+                    (existing.getProjectName() != null ? existing.getProjectName() : "không xác định");
+        };
+        String uploadDate = existing.getCreatedAt() != null
+                ? existing.getCreatedAt().format(UPLOAD_DATE_FORMAT)
+                : "không rõ ngày";
+        return String.format(
+                "Tài liệu này đã tồn tại trên hệ thống: \"%s\" (thuộc %s, tải lên bởi %s ngày %s).",
+                existing.getTitle(), location, existing.getUploaderName(), uploadDate);
     }
 
     private MessageDigest sha256Digest() {

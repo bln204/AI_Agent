@@ -125,6 +125,7 @@ class DocumentApiControllerViewerSecurityTest {
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
         when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther(null));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
+        when(documentAccessService.canViewRawDocument(any(), any())).thenReturn(true);
 
         mockMvc.perform(get("/api/documents/42/viewer"))
                 .andExpect(status().isNotFound());
@@ -139,6 +140,7 @@ class DocumentApiControllerViewerSecurityTest {
         when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
         when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther(pdfFile.toString()));
         when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
+        when(documentAccessService.canViewRawDocument(any(), any())).thenReturn(true);
 
         mockMvc.perform(get("/api/documents/42/viewer"))
                 .andExpect(status().isOk())
@@ -149,6 +151,22 @@ class DocumentApiControllerViewerSecurityTest {
                 // Must never be cached by the browser/intermediate caches --
                 // internal document content should not be persisted client-side.
                 .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    // canAccessDocument only decides SCOPE (department/project/public); raw
+    // file bytes need the stricter canViewRawDocument gate too (business
+    // decision: ordinary project members without leader/Director/Manager
+    // status only get document content through AI chat, never the raw file).
+    @Test
+    @WithMockUser(username = "employee@company.com")
+    void viewer_scopeAllowedButNotRawViewable_isForbidden() throws Exception {
+        when(userRepository.findByEmail("employee@company.com")).thenReturn(Optional.of(employee()));
+        when(documentService.getDocument(42L)).thenReturn(restrictedDocOwnedByOther("does-not-matter.pdf"));
+        when(documentAccessService.canAccessDocument(any(), any())).thenReturn(true);
+        when(documentAccessService.canViewRawDocument(any(), any())).thenReturn(false);
+
+        mockMvc.perform(get("/api/documents/42/viewer"))
+                .andExpect(status().isForbidden());
     }
 
     // GET /api/documents/{id}/viewer-status must follow the exact same

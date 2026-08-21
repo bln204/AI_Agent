@@ -71,11 +71,13 @@
                 <div class="flex justify-between items-start mb-6 flex-wrap gap-3">
                     <h2 class="text-2xl font-bold text-slate-900" th:text="${project.name}">Tên dự án</h2>
                     <span th:class="|px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                frozen ? 'bg-slate-800 text-white' :
                                 project.status.name() == 'RUNNING' ? 'bg-emerald-100 text-emerald-700' :
                                 project.status.name() == 'PAUSED' ? 'bg-amber-100 text-amber-700' :
                                 project.status.name() == 'COMPLETED' ? 'bg-slate-200 text-slate-600' :
                                 'bg-indigo-100 text-indigo-700'}|"
                           th:text="${
+                                frozen ? 'Đóng băng' :
                                 project.status.name() == 'RUNNING' ? 'Đang chạy' :
                                 project.status.name() == 'PAUSED' ? 'Tạm dừng' :
                                 project.status.name() == 'COMPLETED' ? 'Hoàn thành' :
@@ -130,7 +132,14 @@
                         </div>
                         <div class="flex-1 min-w-[200px] hidden" id="extensionDateWrapper">
                             <label class="block text-sm font-bold text-slate-700 mb-1">Ngày gia hạn</label>
-                            <input type="date" name="extensionDate" id="extensionDateInput" class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium">
+                            <div class="relative">
+                                <input type="text" id="extensionDateDisplay" placeholder="dd/mm/yyyy" maxlength="10" inputmode="numeric" autocomplete="off" class="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium">
+                                <button type="button" tabindex="-1" onclick="openDatePicker('extensionDateNative')" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                </button>
+                                <input type="date" id="extensionDateNative" class="sr-only" tabindex="-1" aria-hidden="true" th:attr="data-min=${effectiveDeadline}">
+                            </div>
+                            <input type="hidden" name="extensionDate" id="extensionDateInput">
                         </div>
                         <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">Cập nhật</button>
                     </div>
@@ -196,7 +205,7 @@
 
             <!-- Documents -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canUploadDocs}">
+                <div class="p-8 bg-slate-50 border-b border-slate-200" th:if="${canUploadDocs and !frozen}">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Tải lên hồ sơ tài liệu</h3>
                     <form th:action="@{/projects/{id}/documents/upload(id=${project.id})}" method="post" enctype="multipart/form-data" class="flex flex-col md:flex-row gap-3">
                         <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
@@ -265,7 +274,14 @@
             <input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
             <p class="text-sm text-slate-500 mb-4">Nhập ngày gia hạn mới (phải sau ngày hết hạn hiện tại) để mở lại dự án và trả trạng thái về "Đang chạy".</p>
             <label class="block text-sm font-bold text-slate-700 mb-1">Ngày gia hạn mới</label>
-            <input type="date" name="extensionDate" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+            <div class="relative">
+                <input type="text" id="reopenExtensionDateDisplay" placeholder="dd/mm/yyyy" maxlength="10" inputmode="numeric" autocomplete="off" class="w-full pl-4 pr-10 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required>
+                <button type="button" tabindex="-1" onclick="openDatePicker('reopenExtensionDateNative')" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </button>
+                <input type="date" id="reopenExtensionDateNative" class="sr-only" tabindex="-1" aria-hidden="true" th:attr="data-min=${effectiveDeadline}">
+            </div>
+            <input type="hidden" name="extensionDate" id="reopenExtensionDateIso">
             <div class="mt-6 flex justify-end gap-3">
                 <button type="button" onclick="closeModal('reopenModal')" class="px-5 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all">Hủy</button>
                 <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">Xác nhận mở lại</button>
@@ -288,11 +304,11 @@
     function toggleExtensionDateField() {
         const select = document.getElementById('statusSelect');
         const wrapper = document.getElementById('extensionDateWrapper');
-        const input = document.getElementById('extensionDateInput');
+        const display = document.getElementById('extensionDateDisplay');
         if (!select || !wrapper) return;
         const show = select.value === 'EXTENDED';
         wrapper.classList.toggle('hidden', !show);
-        if (input) input.required = show;
+        if (display) display.required = show;
     }
     document.addEventListener('DOMContentLoaded', toggleExtensionDateField);
 
@@ -301,6 +317,27 @@
             closeModal(event.target.id);
         }
     }
+</script>
+<script src="/js/date-mask.js"></script>
+<script>
+    (function () {
+        // "Ngày gia hạn" phải sau mốc dự kiến kết thúc HIỆN TẠI của dự án
+        // (effectiveDeadline: extensionDate nếu đã từng gia hạn, ngược lại
+        // là expectedEndDate gốc) -- khớp đúng check phía ProjectService.
+        var extNative = document.getElementById('extensionDateNative');
+        initDateMask(document.getElementById('extensionDateDisplay'), document.getElementById('extensionDateInput'), extNative, {
+            min: extNative.dataset.min || '',
+            strictlyAfter: true,
+            message: 'Ngày gia hạn phải sau ngày dự kiến kết thúc hiện tại'
+        });
+
+        var reopenNative = document.getElementById('reopenExtensionDateNative');
+        initDateMask(document.getElementById('reopenExtensionDateDisplay'), document.getElementById('reopenExtensionDateIso'), reopenNative, {
+            min: reopenNative.dataset.min || '',
+            strictlyAfter: true,
+            message: 'Ngày gia hạn mới phải sau ngày dự kiến kết thúc hiện tại'
+        });
+    })();
 </script>
 <script th:if="${canManageMembers}" th:inline="javascript">
     window.ALL_USERS = [
