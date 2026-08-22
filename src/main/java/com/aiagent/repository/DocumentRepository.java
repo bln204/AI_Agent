@@ -140,6 +140,17 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
                                          @Param("userId") Long userId,
                                          Pageable pageable);
 
+    /**
+     * Cùng scope với findByStatusVisibleTo ở trên, dùng cho badge "!" trên menu
+     * (kiểm tra mỗi lần render trang qua GlobalControllerAdvice) -- EXISTS thay
+     * vì phân trang để tránh tải cả list chỉ để biết có/không.
+     */
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM Document d " +
+           "WHERE d.status = :status AND (:roleCode = 'DIRECTOR' OR d.uploadedBy.id = :userId)")
+    boolean existsByStatusVisibleTo(@Param("status") com.aiagent.model.DocumentStatus status,
+                                    @Param("roleCode") String roleCode,
+                                    @Param("userId") Long userId);
+
     @Query("SELECT d FROM Document d WHERE d.normalizedTitle = :normalizedTitle")
     List<Document> findByNormalizedTitle(@Param("normalizedTitle") String normalizedTitle);
 

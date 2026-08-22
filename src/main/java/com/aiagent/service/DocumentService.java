@@ -113,6 +113,21 @@ public class DocumentService {
         return documentRepository.findByStatusVisibleTo(status, roleCode, user.getId(), pageable);
     }
 
+    /**
+     * Badge "!" trên menu "Công Văn Hội Sở" -- cùng scope với tab "Chờ duyệt"
+     * (getDocumentsByStatus/findByStatusVisibleTo): DIRECTOR thấy khi có bất kỳ
+     * tài liệu nào đang PENDING_APPROVAL trong toàn hệ thống; MANAGER chỉ thấy
+     * khi CHÍNH tài liệu do mình upload đang chờ duyệt. EMPLOYEE/role khác luôn
+     * false (không tự upload được nên không thể có tài liệu PENDING_APPROVAL).
+     */
+    public boolean hasPendingApprovalDocuments(User user) {
+        if (user == null || user.getRole() == null) {
+            return false;
+        }
+        return documentRepository.existsByStatusVisibleTo(
+                DocumentStatus.PENDING_APPROVAL, user.getRole().getCode(), user.getId());
+    }
+
     private final com.aiagent.service.DecisionNumberService decisionNumberService;
     private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
@@ -776,7 +791,11 @@ public class DocumentService {
         purgeDocument(doc);
     }
 
-    private void purgeDocument(Document doc) {
+    // Package-private (không phải private): ProjectService#deleteProject tái
+    // dùng để purge tài liệu PROJECT-scope trở thành orphan (không còn thuộc
+    // project nào) khi một project bị xoá, đảm bảo cùng một đường xử lý
+    // vector store + file vật lý + DB record như deleteDocument/deleteProjectDocument.
+    void purgeDocument(Document doc) {
         try {
             documentIngestionService.deleteFromVectorStore(doc.getId());
         } catch (Exception e) {
