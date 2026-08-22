@@ -38,6 +38,8 @@ class ProjectServiceExtensionValidationTest {
     @Mock
     private DocumentRepository documentRepository;
     @Mock
+    private DocumentService documentService;
+    @Mock
     private NotificationService notificationService;
 
     private ProjectService service;
@@ -45,7 +47,7 @@ class ProjectServiceExtensionValidationTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service = new ProjectService(projectRepository, projectMemberRepository, documentRepository, notificationService);
+        service = new ProjectService(projectRepository, projectMemberRepository, documentRepository, documentService, notificationService);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
