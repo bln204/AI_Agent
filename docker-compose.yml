@@ -23,6 +23,12 @@ services:
       - SPRING_AI_VECTORSTORE_QDRANT_HOST=qdrant-db
       - QDRANT_HOST=qdrant-db
       - QDRANT_PORT=6334
+      # App is reached on host port 8081 (see port mapping above), but the
+      # default redirect-uri in application.properties is hardcoded to 8080.
+      # Override it so Google's callback lands on a port that's actually
+      # published. This exact URL must also be added to "Authorized redirect
+      # URIs" in the Google Cloud Console OAuth client.
+      - OAUTH_REDIRECT_URI=http://localhost:8081/login/oauth2/google
       # Pass through necessary ENV vars (These should be set in environment or a .env file)
       - GG_CLIENT_ID=${GG_CLIENT_ID}
       - GG_CLIENT_SECRET=${GG_CLIENT_SECRET}
