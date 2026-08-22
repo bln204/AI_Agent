@@ -9,7 +9,7 @@ WORKDIR /app
 # mid-build DNS/network blip only re-fetches what's still missing instead of
 # re-downloading everything from scratch.
 COPY pom.xml .
-RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
+RUN --mount=type=cache,target=/root/.m2 \
     mvn dependency:go-offline -B \
     -Dmaven.wagon.http.retryHandler.count=5 \
     -Dmaven.wagon.httpconnectionManager.ttlSeconds=25
@@ -18,7 +18,7 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 COPY src ./src
 
 # Build the application
-RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
+RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -DskipTests
 
 # Stage 2: Create the final production image
