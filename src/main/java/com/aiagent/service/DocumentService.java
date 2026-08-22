@@ -113,6 +113,21 @@ public class DocumentService {
         return documentRepository.findByStatusVisibleTo(status, roleCode, user.getId(), pageable);
     }
 
+    /**
+     * Badge "!" trên menu "Công Văn Hội Sở" -- cùng scope với tab "Chờ duyệt"
+     * (getDocumentsByStatus/findByStatusVisibleTo): DIRECTOR thấy khi có bất kỳ
+     * tài liệu nào đang PENDING_APPROVAL trong toàn hệ thống; MANAGER chỉ thấy
+     * khi CHÍNH tài liệu do mình upload đang chờ duyệt. EMPLOYEE/role khác luôn
+     * false (không tự upload được nên không thể có tài liệu PENDING_APPROVAL).
+     */
+    public boolean hasPendingApprovalDocuments(User user) {
+        if (user == null || user.getRole() == null) {
+            return false;
+        }
+        return documentRepository.existsByStatusVisibleTo(
+                DocumentStatus.PENDING_APPROVAL, user.getRole().getCode(), user.getId());
+    }
+
     private final com.aiagent.service.DecisionNumberService decisionNumberService;
     private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
