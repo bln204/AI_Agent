@@ -27,9 +27,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RateLimiterService {
 
     private static final int MAX_LOGIN_FAILURES = 5;
+    private static final int MAX_OTP_VERIFY_FAILURES = 5;
+    private static final int OTP_REQUEST_COOLDOWN_SECONDS = 60;
 
     private final Cache<String, AtomicInteger> loginFailures = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(15))
+            .maximumSize(50_000)
+            .build();
+
+    // SEC — brute-force guard cho /forgot-password/verify-otp, cùng ngưỡng và
+    // cửa sổ với loginFailures nhưng cache riêng để không lẫn 2 luồng khác nhau.
+    private final Cache<String, AtomicInteger> otpVerifyFailures = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(15))
+            .maximumSize(50_000)
+            .build();
+
+    // Chống spam gửi email OTP liên tục cho cùng 1 email/IP.
+    private final Cache<String, Boolean> otpRequestCooldown = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofSeconds(OTP_REQUEST_COOLDOWN_SECONDS))
             .maximumSize(50_000)
             .build();
 
@@ -44,5 +59,26 @@ public class RateLimiterService {
 
     public void recordLoginSuccess(String key) {
         loginFailures.invalidate(key);
+    }
+
+    public boolean isOtpVerifyBlocked(String key) {
+        AtomicInteger count = otpVerifyFailures.getIfPresent(key);
+        return count != null && count.get() >= MAX_OTP_VERIFY_FAILURES;
+    }
+
+    public void recordOtpVerifyFailure(String key) {
+        otpVerifyFailures.get(key, k -> new AtomicInteger(0)).incrementAndGet();
+    }
+
+    public void recordOtpVerifySuccess(String key) {
+        otpVerifyFailures.invalidate(key);
+    }
+
+    public boolean isOtpRequestOnCooldown(String key) {
+        return otpRequestCooldown.getIfPresent(key) != null;
+    }
+
+    public void markOtpRequested(String key) {
+        otpRequestCooldown.put(key, Boolean.TRUE);
     }
 }
