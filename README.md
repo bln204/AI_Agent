@@ -83,6 +83,14 @@ JWT_SECRET=your_secret
 # ========================
 GEMINI_API_KEY=your_api_key
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+
+# ========================
+# Mail (SMTP) — gửi OTP cho chức năng Quên mật khẩu
+# ========================
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_smtp_username
+MAIL_PASSWORD=your_smtp_app_password
 ```
 
 ### 4. Tạo database

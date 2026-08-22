@@ -22,6 +22,7 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.filter.CharacterEncodingFilter;
 import org.springframework.core.Ordered;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.http.HttpMethod;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
@@ -76,6 +77,15 @@ public class SecurityConfig {
                     "/css/**", "/js/**", "/images/**", "/static/**",
                     "/h2-console/**", "/auth/**"
                 ).permitAll()
+                // Flow "Quên mật khẩu" phải hoạt động cho người dùng CHƯA đăng
+                // nhập. GET /change-password và POST /reset-password vẫn permitAll
+                // ở tầng filter này, nhưng PasswordController tự kiểm tra HttpSession
+                // (đã xác thực OTP trong 10 phút) làm ranh giới bảo mật thực sự —
+                // đây là carve-out có phạm vi hẹp, KHÔNG mở thêm bất kỳ path nào
+                // khác. POST /change-password (đổi mật khẩu khi đã đăng nhập)
+                // CỐ TÌNH không nằm trong permitAll, vẫn rơi vào anyRequest().authenticated().
+                .requestMatchers(HttpMethod.GET, "/change-password").permitAll()
+                .requestMatchers("/forgot-password", "/forgot-password/**", "/reset-password").permitAll()
                 // Overall health status must stay reachable without authentication for
                 // Docker/orchestrator liveness & readiness probes. Component-level detail
                 // exposure is separately gated by management.endpoint.health.show-details

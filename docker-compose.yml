@@ -28,6 +28,10 @@ services:
       - GG_CLIENT_SECRET=${GG_CLIENT_SECRET}
       - JWT_SECRET=${JWT_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
     volumes:
       - app_uploads:/app/uploads
       - app_cache:/app/ai-cache

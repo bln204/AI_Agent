@@ -116,6 +116,11 @@ public class DocumentAccessService {
         return RoleConstants.ROLE_DIRECTOR.equals(roleCode) || RoleConstants.ROLE_MANAGER.equals(roleCode);
     }
 
+    private boolean isDirector(User user) {
+        return user != null && user.getRole() != null &&
+            RoleConstants.ROLE_DIRECTOR.equals(user.getRole().getCode());
+    }
+
     /**
      * Trang xem chi tiết tài liệu (document_view) hiển thị toàn bộ nội dung gốc,
      * không qua RAG/permission filter theo từng chunk. Theo quyết định business,
@@ -185,13 +190,46 @@ public class DocumentAccessService {
     }
 
     /**
-     * Ngoại lệ hẹp, có chủ đích (đã xác nhận với business): một EMPLOYEE làm
-     * leader của 1 dự án được phép upload tài liệu CHỈ trong phạm vi dự án đó
-     * -- rule "Nhân viên không được upload tài liệu" (canUpload ở trên) vẫn
-     * giữ nguyên cho MỌI nơi khác (trang /documents chung). KHÔNG được dùng
-     * method này thay cho canUpload() ở ngoài ngữ cảnh 1 project cụ thể.
+     * Upload tài liệu PROJECT-scope vào MỘT dự án cụ thể: chỉ DIRECTOR (quyền
+     * toàn hệ thống, rule 3.1 WORKING_RULES) hoặc leader của CHÍNH dự án đó
+     * (per-project, có thể là EMPLOYEE). Business quyết định: một MANAGER chỉ
+     * là thành viên thường (không phải leader) KHÔNG còn được upload vào dự
+     * án đó chỉ vì role MANAGER -- thành viên còn lại truy cập tài liệu qua
+     * AI chat. canUpload() (Director/Manager) không dùng trực tiếp ở đây nữa;
+     * nó vẫn giữ nguyên và áp dụng cho DEPARTMENT/PUBLIC upload ở nơi khác.
      */
     public boolean canUploadToProject(User user, Project project) {
-        return canUpload(user) || isProjectLeader(user, project);
+        return isDirector(user) || isProjectLeader(user, project);
+    }
+
+    /**
+     * Xoá một tài liệu PROJECT-scope ra khỏi dự án: cùng nhóm người được quản
+     * lý hồ sơ tài liệu dự án như canUploadToProject -- DIRECTOR (toàn hệ
+     * thống) hoặc leader của CHÍNH dự án đó (per-project, có thể là
+     * EMPLOYEE). Thành viên thường (kể cả MANAGER không phải leader) không
+     * được xoá tài liệu dự án dù có thể là người đã tải lên -- quyền này gắn
+     * với vai trò quản lý dự án, khác với DocumentService.deleteDocument
+     * (dùng ở trang /documents chung, xét quyền theo role/uploader).
+     */
+    public boolean canDeleteProjectDocument(User user, Project project) {
+        return isDirector(user) || isProjectLeader(user, project);
+    }
+
+    /**
+     * Xem/tải NỘI DUNG FILE GỐC của tài liệu (vd. GET /api/documents/{id}/viewer)
+     * -- khác với canAccessDocument, vốn chỉ xác định phạm vi truy cập
+     * metadata/chat. Theo quyết định business (canViewDocumentDetail):
+     * Director/Manager luôn được xem file gốc. Với tài liệu PROJECT-scope,
+     * leader của CHÍNH dự án đó cũng được xem file gốc (họ quản lý tài liệu
+     * dự án mình phụ trách, kể cả khi leader là EMPLOYEE). Thành viên dự án
+     * không phải leader (EMPLOYEE lẫn MANAGER không phải leader) KHÔNG được
+     * xem file gốc trực tiếp -- chỉ truy cập nội dung qua AI chat. Đây là
+     * điều kiện BỔ SUNG, phải gọi SAU khi canAccessDocument đã pass, không
+     * thay thế scope check đó.
+     */
+    public boolean canViewRawDocument(User user, Document doc) {
+        if (canViewDocumentDetail(user)) return true;
+        if (doc == null || !AccessLevel.PROJECT.equals(doc.getAccessLevel())) return false;
+        return doc.getProjects().stream().anyMatch(p -> isProjectLeader(user, p));
     }
 }

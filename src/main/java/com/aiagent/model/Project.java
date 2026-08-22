@@ -80,4 +80,28 @@ public class Project {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    /**
+     * extensionDate (nếu có) luôn là mốc hiệu lực mới nhất, thay cho
+     * expectedEndDate gốc (không bao giờ bị ghi đè -- xem business rule).
+     * @Transient để Thymeleaf (${project.effectiveDeadline}) và
+     * ProjectService dùng chung 1 nguồn logic duy nhất, không lặp lại.
+     */
+    @Transient
+    public LocalDate getEffectiveDeadline() {
+        return extensionDate != null ? extensionDate : expectedEndDate;
+    }
+
+    /**
+     * Dự án cũ chưa có expectedEndDate không bao giờ đóng băng; dự án đã
+     * COMPLETED cũng vậy (đóng băng chỉ áp dụng cho dự án còn trong vòng đời
+     * hoạt động). @Transient để cả Thymeleaf (${project.frozen}) lẫn
+     * ProjectService.isFrozen() gọi chung, tránh 2 nơi định nghĩa "đóng băng".
+     */
+    @Transient
+    public boolean isFrozen() {
+        LocalDate deadline = getEffectiveDeadline();
+        if (deadline == null || status == ProjectStatus.COMPLETED) return false;
+        return LocalDate.now().isAfter(deadline);
+    }
 }

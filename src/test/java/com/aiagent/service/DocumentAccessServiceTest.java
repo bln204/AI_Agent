@@ -5,6 +5,7 @@ import com.aiagent.model.Department;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentStatus;
 import com.aiagent.model.Project;
+import com.aiagent.model.ProjectMember;
 import com.aiagent.model.Role;
 import com.aiagent.model.User;
 import com.aiagent.repository.ProjectMemberRepository;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -220,5 +222,108 @@ class DocumentAccessServiceTest {
     @Test
     void nullDocument_isAlwaysDenied() {
         assertFalse(service.canAccessDocument(user(1L, RoleConstants.ROLE_DIRECTOR, null), null));
+    }
+
+    // --- canUploadToProject: only DIRECTOR (any project) or the project's
+    // own leader may upload PROJECT-scope documents. A MANAGER who is merely
+    // a member (not leader) must be denied -- this is the reported bug fix. ---
+
+    private ProjectMember membership(Project project, User user, boolean isLeader) {
+        ProjectMember pm = new ProjectMember();
+        pm.setProject(project);
+        pm.setUser(user);
+        pm.setActive(true);
+        pm.setLeader(isLeader);
+        return pm;
+    }
+
+    @Test
+    void canUploadToProject_director_isAllowed_evenNotAMember() {
+        Project project = new Project();
+        project.setId(77L);
+        User director = user(1L, RoleConstants.ROLE_DIRECTOR, null);
+
+        assertTrue(service.canUploadToProject(director, project));
+    }
+
+    @Test
+    void canUploadToProject_projectLeader_isAllowed_evenIfEmployee() {
+        Project project = new Project();
+        project.setId(77L);
+        User employeeLeader = user(2L, RoleConstants.ROLE_EMPLOYEE, null);
+        when(projectMemberRepository.findByProjectAndUser(project, employeeLeader))
+                .thenReturn(Optional.of(membership(project, employeeLeader, true)));
+
+        assertTrue(service.canUploadToProject(employeeLeader, project));
+    }
+
+    @Test
+    void canUploadToProject_managerMemberButNotLeader_isDenied() {
+        Project project = new Project();
+        project.setId(77L);
+        User manager = user(3L, RoleConstants.ROLE_MANAGER, null);
+        when(projectMemberRepository.findByProjectAndUser(project, manager))
+                .thenReturn(Optional.of(membership(project, manager, false)));
+
+        assertFalse(service.canUploadToProject(manager, project),
+                "MANAGER who is only a project member (not leader) must not be able to upload to that project");
+    }
+
+    @Test
+    void canUploadToProject_managerNotAMemberAtAll_isDenied() {
+        Project project = new Project();
+        project.setId(77L);
+        User manager = user(4L, RoleConstants.ROLE_MANAGER, null);
+        when(projectMemberRepository.findByProjectAndUser(project, manager)).thenReturn(Optional.empty());
+
+        assertFalse(service.canUploadToProject(manager, project));
+    }
+
+    // --- canViewRawDocument: raw file content is more sensitive than
+    // canAccessDocument's scope check. Director/Manager always pass; for a
+    // PROJECT-scope doc, that project's leader also passes; an ordinary
+    // (non-leader) project member does not -- they must go through AI chat. ---
+
+    @Test
+    void canViewRawDocument_manager_isAllowed_regardlessOfDoc() {
+        User manager = user(1L, RoleConstants.ROLE_MANAGER, null);
+        Document doc = document(DocumentStatus.APPROVED, AccessLevel.PROJECT, user(9L, RoleConstants.ROLE_DIRECTOR, null));
+
+        assertTrue(service.canViewRawDocument(manager, doc));
+    }
+
+    @Test
+    void canViewRawDocument_projectLeaderEmployee_isAllowed() {
+        Project project = new Project();
+        project.setId(77L);
+        User employeeLeader = user(2L, RoleConstants.ROLE_EMPLOYEE, null);
+        Document doc = document(DocumentStatus.APPROVED, AccessLevel.PROJECT, user(9L, RoleConstants.ROLE_DIRECTOR, null));
+        doc.setProjects(Set.of(project));
+        when(projectMemberRepository.findByProjectAndUser(project, employeeLeader))
+                .thenReturn(Optional.of(membership(project, employeeLeader, true)));
+
+        assertTrue(service.canViewRawDocument(employeeLeader, doc));
+    }
+
+    @Test
+    void canViewRawDocument_projectMemberNotLeader_isDenied() {
+        Project project = new Project();
+        project.setId(77L);
+        User employeeMember = user(3L, RoleConstants.ROLE_EMPLOYEE, null);
+        Document doc = document(DocumentStatus.APPROVED, AccessLevel.PROJECT, user(9L, RoleConstants.ROLE_DIRECTOR, null));
+        doc.setProjects(Set.of(project));
+        when(projectMemberRepository.findByProjectAndUser(project, employeeMember))
+                .thenReturn(Optional.of(membership(project, employeeMember, false)));
+
+        assertFalse(service.canViewRawDocument(employeeMember, doc),
+                "a project member who is not the leader must not see the raw file directly");
+    }
+
+    @Test
+    void canViewRawDocument_employeeOnDepartmentDoc_isDenied() {
+        User employee = user(4L, RoleConstants.ROLE_EMPLOYEE, department(10L, "HR"));
+        Document doc = document(DocumentStatus.APPROVED, AccessLevel.DEPARTMENT, user(9L, RoleConstants.ROLE_MANAGER, null));
+
+        assertFalse(service.canViewRawDocument(employee, doc));
     }
 }

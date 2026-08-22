@@ -3,6 +3,7 @@ package com.aiagent.service;
 import com.aiagent.model.AccessLevel;
 import com.aiagent.model.Document;
 import com.aiagent.model.DocumentStatus;
+import com.aiagent.model.ProjectStatus;
 import com.aiagent.model.User;
 import com.aiagent.repository.DepartmentRepository;
 import com.aiagent.repository.DocumentRepository;
@@ -116,35 +117,81 @@ public class DocumentService {
     private final DocumentDuplicateDetectionService documentDuplicateDetectionService;
 
     /**
-     * Ngoại lệ hẹp, có chủ đích (business decision, xem DocumentAccessService.
-     * canUploadToProject): một EMPLOYEE làm leader của 1 dự án cụ thể được
-     * phép upload tài liệu CHỈ khi accessLevel=PROJECT và MỌI project trong
-     * projectIds đều do chính họ làm leader -- không được lợi dụng ô chọn
-     * nhiều dự án ở trang /documents chung để gắn vào dự án họ không lãnh đạo.
-     * Rule "Nhân viên không được upload tài liệu" (canUpload) không đổi cho
-     * mọi trường hợp khác.
+     * Gate riêng cho upload tài liệu PROJECT-scope: uỷ quyền hoàn toàn cho
+     * DocumentAccessService.canUploadToProject (DIRECTOR toàn hệ thống HOẶC
+     * leader của CHÍNH dự án đó, có thể là EMPLOYEE) cho MỌI project trong
+     * projectIds -- không được lợi dụng ô chọn nhiều dự án ở trang /documents
+     * chung để gắn vào dự án mình không lãnh đạo. canUpload() (Director/
+     * Manager) KHÔNG được dùng làm lối tắt ở đây: một MANAGER chỉ là thành
+     * viên thường (không phải leader) của dự án không còn upload được vào dự
+     * án đó -- business quyết định, xem canUploadToProject. canUpload() vẫn
+     * giữ nguyên cho mọi accessLevel khác (DEPARTMENT/PUBLIC).
      */
-    private boolean isProjectLeaderUploadException(User uploader, AccessLevel accessLevel, List<Long> projectIds) {
-        if (!AccessLevel.PROJECT.equals(accessLevel) || projectIds == null || projectIds.isEmpty()) {
+    private boolean isAuthorizedForProjectUpload(User uploader, List<Long> projectIds) {
+        if (projectIds == null || projectIds.isEmpty()) {
             return false;
         }
         return projectIds.stream().allMatch(pid -> projectRepository.findById(pid)
-                .map(p -> documentAccessService.isProjectLeader(uploader, p))
+                .map(p -> documentAccessService.canUploadToProject(uploader, p))
                 .orElse(false));
     }
 
-    @Transactional
+    /**
+     * COMPLETED là trạng thái terminal của dự án (xem ProjectService#isCompleted):
+     * một khi đã Hoàn thành, KHÔNG AI -- kể cả Director hay chính leader vừa
+     * pass check quyền ở isAuthorizedForProjectUpload -- được upload thêm tài
+     * liệu vào đó. Đây là true security boundary cho việc upload (áp dụng cho
+     * MỌI entry point dẫn tới đây: /documents/upload, /api/documents/upload,
+     * /projects/{id}/documents/upload), không chỉ riêng ProjectController.
+     */
+    private void assertProjectsNotCompleted(List<Long> projectIds) {
+        for (Long pid : projectIds) {
+            projectRepository.findById(pid).ifPresent(p -> {
+                if (p.getStatus() == ProjectStatus.COMPLETED) {
+                    throw new IllegalStateException("Dự án đã Hoàn thành và không thể tải thêm tài liệu.");
+                }
+            });
+        }
+    }
+
     public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
                                  java.util.List<Long> projectIds, AccessLevel accessLevel,
                                  String decision, com.aiagent.model.DocumentClassification classification,
                                  String projectName, String description, boolean internalSourceFlag,
                                  MultipartFile file, User uploader) throws java.io.IOException {
+        return uploadDocument(title, content, departmentIds, projectIds, accessLevel, decision, classification,
+                projectName, description, internalSourceFlag, file, uploader, false);
+    }
+
+    /**
+     * selfApprove: dùng RIÊNG cho các endpoint đã tự gác quyền chặt hơn
+     * canUpload() (vd. ProjectController -- chỉ Director hoặc Leader của
+     * đúng dự án đó mới gọi tới được), để tài liệu hiển thị/chat được ngay
+     * cho cả nhóm dự án thay vì rơi vào hàng chờ Giám đốc duyệt. KHÔNG được
+     * set true cho luồng upload chung ở /documents -- nơi đó vẫn phải giữ
+     * đúng rule cũ (Trưởng phòng upload phải qua Giám đốc duyệt), nếu không
+     * một Trưởng phòng bất kỳ có thể tự duyệt tài liệu của mình bằng cách gắn
+     * accessLevel=PROJECT ở trang chung.
+     */
+    @Transactional
+    public Document uploadDocument(String title, String content, java.util.List<Long> departmentIds,
+                                 java.util.List<Long> projectIds, AccessLevel accessLevel,
+                                 String decision, com.aiagent.model.DocumentClassification classification,
+                                 String projectName, String description, boolean internalSourceFlag,
+                                 MultipartFile file, User uploader, boolean selfApprove) throws java.io.IOException {
 
         if (uploader == null || uploader.getRole() == null) {
             throw new SecurityException("Không có quyền tải lên tài liệu.");
         }
 
-        if (!documentAccessService.canUpload(uploader) && !isProjectLeaderUploadException(uploader, accessLevel, projectIds)) {
+        // PROJECT-scope upload dùng gate riêng (Director hoặc leader của
+        // CHÍNH dự án đó) thay vì canUpload() -- xem isAuthorizedForProjectUpload.
+        // Mọi accessLevel khác (DEPARTMENT/PUBLIC) giữ nguyên canUpload() cũ
+        // (Director/Manager).
+        boolean authorized = AccessLevel.PROJECT.equals(accessLevel)
+                ? isAuthorizedForProjectUpload(uploader, projectIds)
+                : documentAccessService.canUpload(uploader);
+        if (!authorized) {
             throw new SecurityException("Bạn không có quyền tải lên tài liệu.");
         }
 
@@ -153,6 +200,9 @@ public class DocumentService {
         }
         if (AccessLevel.PROJECT.equals(accessLevel) && (projectIds == null || projectIds.isEmpty())) {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một dự án cho mức truy cập PROJECT.");
+        }
+        if (AccessLevel.PROJECT.equals(accessLevel)) {
+            assertProjectsNotCompleted(projectIds);
         }
 
         // --- Duplicate detection gate (Level 1/2/3). Runs entirely BEFORE any
@@ -209,8 +259,10 @@ public class DocumentService {
         // immediately as before; MANAGER uploads require DIRECTOR approval
         // first (business requirement) and must NOT be ingested into Qdrant
         // until approved -- see the `hasFile` ingestion block below, gated on
-        // this same status.
-        doc.setStatus(RoleConstants.isHighLevel(uploader.getRole().getCode())
+        // this same status. selfApprove (project-leader path only, see javadoc
+        // on the public overload above) grants the same immediate-APPROVED
+        // treatment without touching the role-based rule for every other path.
+        doc.setStatus((RoleConstants.isHighLevel(uploader.getRole().getCode()) || selfApprove)
                 ? DocumentStatus.APPROVED
                 : DocumentStatus.PENDING_APPROVAL);
         doc.setClassification(classification != null ? classification : com.aiagent.model.DocumentClassification.OTHER);
@@ -684,10 +736,51 @@ public class DocumentService {
             throw new SecurityException("Bạn không có quyền xoá tài liệu này.");
         }
 
+        purgeDocument(doc);
+    }
+
+    /**
+     * Xoá tài liệu PROJECT-scope trong phạm vi MỘT dự án cụ thể -- khác với
+     * deleteDocument() (trang /documents chung, xét quyền theo role/uploader):
+     * quyền ở đây uỷ quyền hoàn toàn cho
+     * DocumentAccessService.canDeleteProjectDocument (Director toàn hệ thống
+     * hoặc leader của CHÍNH dự án đó, có thể là EMPLOYEE). Bắt buộc kiểm tra
+     * tài liệu thực sự thuộc projectId truyền vào -- chặn việc lợi dụng URL
+     * đổi projectId để xoá tài liệu ngoài phạm vi dự án mình quản lý. Dự án
+     * đã Hoàn thành hoặc đang Đóng băng thì không ai xoá được, kể cả Director
+     * (Director cần "Mở lại dự án" trước -- cùng rule với mọi thao tác chỉnh
+     * sửa dự án khác, xem ProjectService#requireEditable).
+     */
+    @Transactional
+    public void deleteProjectDocument(Long docId, Long projectId, User requester) {
+        Document doc = getDocument(docId);
+        boolean belongsToProject = doc.getProjects().stream()
+                .anyMatch(p -> p.getId().equals(projectId));
+        if (!belongsToProject) {
+            throw new IllegalArgumentException("Tài liệu không thuộc dự án này.");
+        }
+
+        com.aiagent.model.Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dự án."));
+
+        if (!documentAccessService.canDeleteProjectDocument(requester, project)) {
+            throw new SecurityException("Bạn không có quyền xoá tài liệu trong dự án này.");
+        }
+        if (project.getStatus() == ProjectStatus.COMPLETED) {
+            throw new IllegalStateException("Dự án đã Hoàn thành và không thể xoá tài liệu.");
+        }
+        if (project.isFrozen()) {
+            throw new IllegalStateException("Dự án đã hết hạn và đang bị đóng băng. Giám đốc cần mở lại dự án trước khi xoá tài liệu.");
+        }
+
+        purgeDocument(doc);
+    }
+
+    private void purgeDocument(Document doc) {
         try {
-            documentIngestionService.deleteFromVectorStore(id);
+            documentIngestionService.deleteFromVectorStore(doc.getId());
         } catch (Exception e) {
-            log.error("Failed to remove document {} from vector store: {}", id, e.getMessage());
+            log.error("Failed to remove document {} from vector store: {}", doc.getId(), e.getMessage());
         }
 
         documentRepository.delete(doc);
@@ -696,7 +789,7 @@ public class DocumentService {
             try {
                 Files.deleteIfExists(Paths.get(doc.getFilePath()));
             } catch (IOException e) {
-                log.warn("Không thể xóa file vật lý cho tài liệu {}: {}", id, e.getMessage());
+                log.warn("Không thể xóa file vật lý cho tài liệu {}: {}", doc.getId(), e.getMessage());
             }
         }
     }
