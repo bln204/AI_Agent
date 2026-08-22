@@ -112,6 +112,7 @@ public class ProjectController {
         boolean canUpdate = documentAccessService.canUpdateProject(user, project);
         boolean canManageMembers = documentAccessService.canManageMembers(user);
         boolean canUploadDocs = documentAccessService.canUploadToProject(user, project);
+        boolean canDeleteDocs = documentAccessService.canDeleteProjectDocument(user, project);
         boolean canViewDocDetail = documentAccessService.canViewDocumentDetail(user);
         boolean isDirector = documentAccessService.canManageProjects(user);
         boolean frozen = projectService.isFrozen(project);
@@ -134,6 +135,7 @@ public class ProjectController {
         model.addAttribute("canUpdate", canUpdate);
         model.addAttribute("canManageMembers", canManageMembers);
         model.addAttribute("canUploadDocs", canUploadDocs);
+        model.addAttribute("canDeleteDocs", canDeleteDocs);
         model.addAttribute("canViewDocDetail", canViewDocDetail);
         model.addAttribute("isDirector", isDirector);
         model.addAttribute("frozen", frozen);
@@ -241,6 +243,29 @@ public class ProjectController {
             redirectAttributes.addFlashAttribute("success", "Đã tải tài liệu lên dự án!");
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "tải tài liệu lên dự án"));
+        }
+        return "redirect:/projects/" + id;
+    }
+
+    @PostMapping("/{id}/documents/{docId}/delete")
+    public String deleteProjectDocument(@PathVariable Long id, @PathVariable Long docId,
+                                        Authentication authentication, RedirectAttributes redirectAttributes) {
+        User user = resolveUser(authentication);
+        Project project = projectService.getProjectById(id).orElse(null);
+        if (project == null) {
+            redirectAttributes.addFlashAttribute("error", "Không tìm thấy dự án.");
+            return "redirect:/projects";
+        }
+        if (!documentAccessService.canDeleteProjectDocument(user, project)) {
+            redirectAttributes.addFlashAttribute("error", "Bạn không có quyền xoá tài liệu trong dự án này.");
+            return "redirect:/projects/" + id;
+        }
+
+        try {
+            documentService.deleteProjectDocument(docId, id, user);
+            redirectAttributes.addFlashAttribute("success", "Đã xoá tài liệu khỏi dự án!");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", friendlyErrorMessage(e, "xoá tài liệu dự án"));
         }
         return "redirect:/projects/" + id;
     }
