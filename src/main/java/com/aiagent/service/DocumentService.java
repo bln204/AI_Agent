@@ -776,7 +776,11 @@ public class DocumentService {
         purgeDocument(doc);
     }
 
-    private void purgeDocument(Document doc) {
+    // Package-private (không phải private): ProjectService#deleteProject tái
+    // dùng để purge tài liệu PROJECT-scope trở thành orphan (không còn thuộc
+    // project nào) khi một project bị xoá, đảm bảo cùng một đường xử lý
+    // vector store + file vật lý + DB record như deleteDocument/deleteProjectDocument.
+    void purgeDocument(Document doc) {
         try {
             documentIngestionService.deleteFromVectorStore(doc.getId());
         } catch (Exception e) {

@@ -28,6 +28,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentService documentService;
     private final NotificationService notificationService;
 
     public List<Project> getAllProjects() {
@@ -140,6 +141,16 @@ public class ProjectService {
         return projectRepository.save(project);
     }
 
+    /**
+     * Xoá project phải dọn sạch mọi thứ liên quan (member + tài liệu), không
+     * để lại rác: tài liệu PROJECT-scope mà sau khi gỡ liên kết không còn
+     * thuộc project nào nữa là orphan thật sự (gần như không ai truy cập
+     * được, trừ Director) -- purge hẳn (DB + vector store + file vật lý) qua
+     * DocumentService#purgeDocument thay vì chỉ gỡ liên kết, để không giữ lại
+     * fileHash/contentHash cũ chặn upload lại. Tài liệu vẫn còn thuộc project
+     * KHÁC (many-to-many) thì chỉ gỡ liên kết, không được xoá vì project kia
+     * vẫn đang dùng.
+     */
     @Transactional
     public void deleteProject(Long id) {
         Project project = getProjectOrThrow(id);
@@ -150,7 +161,11 @@ public class ProjectService {
         List<Document> documents = documentRepository.findByProjectId(id);
         for (Document doc : documents) {
             doc.getProjects().remove(project);
-            documentRepository.save(doc);
+            if (doc.getProjects().isEmpty()) {
+                documentService.purgeDocument(doc);
+            } else {
+                documentRepository.save(doc);
+            }
         }
         projectRepository.delete(project);
     }
