@@ -21,13 +21,14 @@ public class HydrationService {
 
     private final DocumentRepository documentRepository;
     private final DocumentAccessService documentAccessService;
-    
+
     private final Map<Set<Long>, CompletableFuture<Map<Long, Document>>> flightCache = new ConcurrentHashMap<>();
 
     public List<org.springframework.ai.document.Document> hydrateAndValidate(
             List<org.springframework.ai.document.Document> chunks, User user) {
-        
-        if (chunks == null || chunks.isEmpty()) return Collections.emptyList();
+
+        if (chunks == null || chunks.isEmpty())
+            return Collections.emptyList();
 
         Set<Long> docIds = chunks.stream()
                 .map(this::getDocId)
@@ -44,17 +45,24 @@ public class HydrationService {
         logMetrics(results);
 
         return results.stream()
-                .filter(res -> res.status() == Status.VALID || (res.status() != Status.ORPHAN && isSafeFallback(res.chunk())))
+                .filter(res -> res.status() == Status.VALID
+                        || (res.status() != Status.ORPHAN && isSafeFallback(res.chunk())))
                 .map(ValidatedChunk::chunk)
                 .collect(Collectors.toList());
     }
 
-    public enum Status { VALID, STALE, ORPHAN }
-    public record ValidatedChunk(org.springframework.ai.document.Document chunk, Status status) {}
+    public enum Status {
+        VALID, STALE, ORPHAN
+    }
 
-    private ValidatedChunk validateChunk(org.springframework.ai.document.Document chunk, Map<Long, Document> snapshot, User user) {
+    public record ValidatedChunk(org.springframework.ai.document.Document chunk, Status status) {
+    }
+
+    private ValidatedChunk validateChunk(org.springframework.ai.document.Document chunk, Map<Long, Document> snapshot,
+            User user) {
         Long id = getDocId(chunk);
-        if (id == null) return new ValidatedChunk(chunk, Status.ORPHAN);
+        if (id == null)
+            return new ValidatedChunk(chunk, Status.ORPHAN);
 
         Document meta = snapshot.get(id);
 
@@ -91,40 +99,43 @@ public class HydrationService {
 
     private void logMetrics(List<ValidatedChunk> results) {
         long total = results.size();
-        if (total == 0) return;
+        if (total == 0)
+            return;
 
         long orphans = results.stream().filter(r -> r.status() == Status.ORPHAN).count();
         long stale = results.stream().filter(r -> r.status() == Status.STALE).count();
         double dropRate = (double) orphans / total;
 
-        log.info("[RAG-METRICS] Hydration complete. Total={}, Orphans={}, Stale={}, DropRate={}%", 
+        log.info("[RAG-METRICS] Hydration complete. Total={}, Orphans={}, Stale={}, DropRate={}%",
                 total, orphans, stale, String.format("%.2f", dropRate * 100));
     }
-    
 
     private Map<Long, com.aiagent.model.Document> fetchBatch(Set<Long> docIds) {
-        return flightCache.computeIfAbsent(docIds, ids -> 
-            CompletableFuture.supplyAsync(() -> {
-                try {
-                    return documentRepository.findAllByIdInWithAssociations(ids).stream()
-                            .collect(Collectors.toMap(com.aiagent.model.Document::getId, d -> d));
-                } catch (Exception e) {
-                    log.error("[HYDRATION] Failed to fetch documents for ids: {}. Error: {}", ids, e.getMessage());
-                    return Collections.<Long, com.aiagent.model.Document>emptyMap();
-                }
-            }).orTimeout(300, TimeUnit.MILLISECONDS)
-              .thenApply(res -> res)
-              .whenComplete((res, ex) -> flightCache.remove(docIds))
-        ).join();
+        return flightCache.computeIfAbsent(docIds, ids -> CompletableFuture.supplyAsync(() -> {
+            try {
+                return documentRepository.findAllByIdInWithAssociations(ids).stream()
+                        .collect(Collectors.toMap(com.aiagent.model.Document::getId, d -> d));
+            } catch (Exception e) {
+                log.error("[HYDRATION] Failed to fetch documents for ids: {}. Error: {}", ids, e.getMessage());
+                return Collections.<Long, com.aiagent.model.Document>emptyMap();
+            }
+        }).orTimeout(3000, TimeUnit.MILLISECONDS)
+                .thenApply(res -> res)
+                .whenComplete((res, ex) -> flightCache.remove(docIds))).join();
     }
 
     private boolean isSafeFallback(org.springframework.ai.document.Document p) {
-        if (!"PUBLIC".equals(p.getMetadata().get("access_level"))) return false;
+        if (!"PUBLIC".equals(p.getMetadata().get("access_level")))
+            return false;
         Object indexedAt = p.getMetadata().getOrDefault("ingested_at", p.getMetadata().get("indexed_at"));
         long ts = -1;
-        if (indexedAt instanceof Number n) ts = n.longValue();
+        if (indexedAt instanceof Number n)
+            ts = n.longValue();
         else if (indexedAt instanceof String s) {
-            try { ts = Long.parseLong(s); } catch (Exception e) {}
+            try {
+                ts = Long.parseLong(s);
+            } catch (Exception e) {
+            }
         }
         return ts != -1 && (System.currentTimeMillis() - ts) < 86400000L;
     }
@@ -136,17 +147,20 @@ public class HydrationService {
         m.put("document_name", meta.getTitle());
         m.put("source", meta.getTitle());
         m.put("upload_date", meta.getCreatedAt().toString());
-        m.put("decision_number", meta.getDecisionNumber() != null ? meta.getDecisionNumber() : (meta.getDecision() != null ? meta.getDecision() : "N/A"));
+        m.put("decision_number", meta.getDecisionNumber() != null ? meta.getDecisionNumber()
+                : (meta.getDecision() != null ? meta.getDecision() : "N/A"));
         m.put("user_name", meta.getUploaderName());
         m.put("uploader_role", meta.getUploaderRole() != null ? meta.getUploaderRole() : "UNKNOWN");
-        m.put("department", meta.getDepartmentName() != null ? meta.getDepartmentName() : (meta.getDepartments().isEmpty() ? "N/A" : meta.getDepartments().iterator().next().getName()));
+        m.put("department", meta.getDepartmentName() != null ? meta.getDepartmentName()
+                : (meta.getDepartments().isEmpty() ? "N/A" : meta.getDepartments().iterator().next().getName()));
         m.put("project_name", meta.getProjectName() != null ? meta.getProjectName() : "N/A");
         m.put("internal_source_flag", String.valueOf(meta.isInternalSourceFlag()));
     }
 
     private Long getDocId(org.springframework.ai.document.Document p) {
         Object id = p.getMetadata().get("document_id");
-        if (id instanceof Number n) return n.longValue();
+        if (id instanceof Number n)
+            return n.longValue();
         if (id instanceof String s && !s.isBlank()) {
             try {
                 return Long.parseLong(s);
@@ -159,7 +173,8 @@ public class HydrationService {
 
     private int getVersion(org.springframework.ai.document.Document p) {
         Object v = p.getMetadata().get("version");
-        if (v instanceof Number n) return n.intValue();
+        if (v instanceof Number n)
+            return n.intValue();
         if (v instanceof String s) {
             try {
                 return Integer.parseInt(s);
