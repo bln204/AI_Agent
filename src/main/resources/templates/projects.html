@@ -34,7 +34,9 @@
 
             <!-- Projects Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" th:if="${!projects.isEmpty()}">
-                <div th:each="proj : ${projects}" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all group">
+                <div th:each="proj : ${projects}" class="relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all group">
+                    <span th:if="${proj.pendingExtensionDate != null}" title="Có yêu cầu gia hạn dự án đang chờ duyệt"
+                          class="absolute -top-2 -right-2 flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold shadow-md ring-2 ring-white z-10">!</span>
                     <div class="flex justify-between items-start mb-4">
                         <h3 class="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors" th:text="${proj.name}">Tên dự án</h3>
                         <span th:class="|px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
